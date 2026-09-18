@@ -1,0 +1,126 @@
+import type { WebsiteData } from "./types";
+
+const spark = () => [42, 48, 45, 52, 58, 55, 62, 68, 64, 72, 70, 78];
+
+/** Drop-in fixture matching the NOS Website Signals section. */
+export const sampleWebsiteData: WebsiteData = {
+  tldr: {
+    summary:
+      "Website signals show strong intent from identified accounts in your ICP. High scroll depth and return visitor rates suggest your content is building genuine brand consideration before conversion.",
+    actions: [
+      {
+        title: "Trigger outreach on hot accounts",
+        description: "22 companies scored Hot this month with no open opportunity. Route them to SDRs immediately.",
+        priority: "high",
+        cta: "Create workflow",
+      },
+      {
+        title: "Reduce quick-back rate",
+        description: "Review landing page clarity and headline alignment with ad messaging.",
+        priority: "high",
+        cta: "Review pages",
+      },
+      {
+        title: "Retarget warm accounts",
+        description: "Build a retargeting audience from companies that visited pricing but haven't requested a demo.",
+        priority: "medium",
+        cta: "Build audience",
+      },
+    ],
+  },
+  sessions: { value: 24600, change: 18, sparkline: spark() },
+  rageclickRate: { value: 14.02, change: -2, sparkline: spark() },
+  deadclickRate: { value: 8.7, change: -5, sparkline: spark() },
+  scrollDepth: { value: 63, change: 4, sparkline: spark() },
+  jsErrors: { value: 199, change: -12, sparkline: spark() },
+  quickBackRate: { value: 4.16, change: -1, sparkline: spark() },
+  readingBehavior: [
+    { label: "Casual", pct: 71.77, sessions: 1027, color: "#7C7FFF" },
+    { label: "Serious", pct: 18.43, sessions: 264, color: "#FBBF24" },
+    { label: "Reader", pct: 9.8, sessions: 140, color: "#34D399" },
+  ],
+  visitorTrend: Array.from({ length: 12 }, (_, i) => ({
+    date: `2026-${String(i + 1).padStart(2, "0")}-01`,
+    value: Math.round(580 + i * 8 + Math.sin(i * 0.7) * 60),
+  })),
+  trafficSources: [
+    { name: "Organic", value: 38 },
+    { name: "LinkedIn", value: 24 },
+    { name: "Direct", value: 18 },
+    { name: "Referral", value: 12 },
+    { name: "Email", value: 8 },
+  ],
+  visitorCountries: [
+    { code: "US", name: "United States", flag: "🇺🇸", traffic: 8200, trafficChange: 12, lat: 37.09, lon: -95.71 },
+    { code: "IN", name: "India", flag: "🇮🇳", traffic: 3400, trafficChange: 34, lat: 20.59, lon: 78.96 },
+    { code: "GB", name: "United Kingdom", flag: "🇬🇧", traffic: 2100, trafficChange: 8, lat: 55.38, lon: -3.44 },
+    { code: "CA", name: "Canada", flag: "🇨🇦", traffic: 1400, trafficChange: 5, lat: 56.13, lon: -106.35 },
+    { code: "DE", name: "Germany", flag: "🇩🇪", traffic: 980, trafficChange: -3, lat: 51.17, lon: 10.45 },
+    { code: "AU", name: "Australia", flag: "🇦🇺", traffic: 760, trafficChange: 18, lat: -25.27, lon: 133.78 },
+    { code: "SG", name: "Singapore", flag: "🇸🇬", traffic: 540, trafficChange: 22, lat: 1.35, lon: 103.82 },
+  ],
+  topPages: [
+    { url: "/pricing", sessions: 4200, scrollDepth: 84, exitRate: 28 },
+    { url: "/roi-calculator", sessions: 3100, scrollDepth: 72, exitRate: 14 },
+    { url: "/case-studies", sessions: 2800, scrollDepth: 91, exitRate: 12 },
+    { url: "/product", sessions: 2400, scrollDepth: 61, exitRate: 36 },
+    { url: "/blog/pipeline-intelligence", sessions: 1900, scrollDepth: 88, exitRate: 42 },
+    { url: "/integrations", sessions: 1400, scrollDepth: 54, exitRate: 31 },
+  ],
+  funnelSteps: [
+    { label: "Homepage", sessions: 18400, dropoffPct: 0 },
+    { label: "Product Page", sessions: 9800, dropoffPct: 47 },
+    { label: "Pricing", sessions: 4200, dropoffPct: 57 },
+    { label: "Demo Request", sessions: 1100, dropoffPct: 74 },
+    { label: "Confirmed", sessions: 340, dropoffPct: 69 },
+  ],
+  sessionRecordings: [
+    { id: "sr1", page: "/pricing", duration: "6m 12s", flags: ["rage-click", "dead-click"], country: "🇺🇸 US", device: "desktop" },
+    { id: "sr2", page: "/roi-calculator", duration: "4m 38s", flags: [], country: "🇬🇧 UK", device: "desktop" },
+    { id: "sr3", page: "/product", duration: "1m 44s", flags: ["quick-back"], country: "🇮🇳 IN", device: "mobile" },
+    { id: "sr4", page: "/integrations", duration: "8m 02s", flags: ["js-error"], country: "🇩🇪 DE", device: "desktop" },
+    { id: "sr5", page: "/blog/pipeline-intelligence", duration: "9m 51s", flags: [], country: "🇦🇺 AU", device: "tablet" },
+    { id: "sr6", page: "/case-studies", duration: "0m 52s", flags: ["quick-back", "rage-click"], country: "🇨🇦 CA", device: "mobile" },
+  ],
+  signals: [
+    {
+      id: "sig1",
+      company: "Acme Robotics",
+      industry: "Industrial IoT",
+      signalScore: 92,
+      pagesVisited: 8,
+      timeOnSite: "12m 04s",
+      source: "Organic",
+      intent: "hot",
+      pages: ["/pricing", "/roi-calculator", "/case-studies"],
+      companySize: "250–500",
+      linkedinUrl: "https://linkedin.com",
+    },
+    {
+      id: "sig2",
+      company: "Northwind Analytics",
+      industry: "SaaS",
+      signalScore: 74,
+      pagesVisited: 5,
+      timeOnSite: "7m 22s",
+      source: "LinkedIn",
+      intent: "warm",
+      pages: ["/product", "/integrations"],
+      companySize: "50–100",
+      linkedinUrl: "https://linkedin.com",
+    },
+    {
+      id: "sig3",
+      company: "Brightline Media",
+      industry: "Marketing",
+      signalScore: 41,
+      pagesVisited: 2,
+      timeOnSite: "1m 18s",
+      source: "Direct",
+      intent: "cold",
+      pages: ["/blog/pipeline-intelligence"],
+      companySize: "10–50",
+      linkedinUrl: "https://linkedin.com",
+    },
+  ],
+};

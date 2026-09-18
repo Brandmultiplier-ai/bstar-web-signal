@@ -1,0 +1,63 @@
+@import "tailwindcss";
+@import "../website-signals-kit/styles/tokens.css";
+
+/*
+ * tokens.css is the single palette. The --color-* names below are what the
+ * pre-kit dashboard components reference, kept as thin aliases so both sets of
+ * components render from one theme.
+ */
+:root {
+  --color-canvas: var(--nos-bg-canvas);
+  --color-panel: var(--nos-bg-surface);
+  --color-panel-border: var(--border);
+  --color-ink: var(--nos-text-primary);
+  --color-ink-muted: var(--nos-text-secondary);
+  --color-accent: var(--nos-accent);
+  --color-warn: var(--nos-signal-warm);
+  --color-danger: var(--nos-negative);
+  --color-good: var(--nos-positive);
+}
+
+html {
+  background: var(--nos-bg-canvas);
+}
+
+body {
+  /* Fixed so the gradient anchors to the viewport rather than scrolling with
+     a long report and banding at the bottom. */
+  background: var(--vui-gradient-canvas) fixed;
+  color: var(--nos-text-primary);
+  font-family: var(--font-geist-sans);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* Dark scrollbars; the default light ones cut hard against the navy canvas. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* Native dropdown options render on the OS surface, so force them dark. */
+select option {
+  background: #0f1535;
+  color: #ffffff;
+}

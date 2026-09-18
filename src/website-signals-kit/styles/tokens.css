@@ -1,0 +1,135 @@
+/**
+ * Vision UI Pro design tokens.
+ *
+ * Dark-only by design: the theme is built on a deep navy gradient canvas with
+ * translucent glass cards, so there is no light variant to keep in sync.
+ *
+ * The --nos-* names are the contract the kit components already read, so they
+ * stay and are simply repointed at Vision UI values. The --vui-* names are the
+ * new gradient/shadow primitives that have no --nos-* equivalent.
+ */
+
+:root {
+  /* Brand */
+  --nos-accent: #0075ff;
+  --nos-accent-2: #21d4fd;
+  --nos-accent-muted: rgba(0, 117, 255, 0.12);
+  --nos-accent-border: rgba(0, 117, 255, 0.35);
+  --nos-accent-glow: rgba(0, 117, 255, 0.35);
+
+  /* Status */
+  --nos-positive: #01b574;
+  --nos-negative: #e31a1a;
+  --nos-signal-hot: #e31a1a;
+  --nos-signal-warm: #ffb547;
+  --nos-signal-cold: #718096;
+
+  /* Surfaces. bg-canvas is a flat fallback; the gradient lives on <body>. */
+  --nos-bg-canvas: #0b1437;
+  --nos-bg-surface: rgba(6, 11, 40, 0.94);
+  --nos-bg-elevated: rgba(255, 255, 255, 0.06);
+  --nos-bg-overlay: #0f1535;
+
+  /* Type */
+  --nos-text-primary: #ffffff;
+  --nos-text-secondary: #a0aec0;
+  --nos-text-muted: #718096;
+
+  --border: rgba(255, 255, 255, 0.08);
+
+  --font-geist-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-geist-mono: var(--font-jakarta), ui-monospace, SFMono-Regular, monospace;
+
+  --sidebar-width: 264px;
+
+  /* Gradients lifted from the Vision UI screens */
+  --vui-gradient-canvas: linear-gradient(
+    159.02deg,
+    #0f123b 14.25%,
+    #090d2e 56.45%,
+    #020515 86.14%
+  );
+  --vui-gradient-card: linear-gradient(
+    127.09deg,
+    rgba(6, 11, 40, 0.94) 19.41%,
+    rgba(10, 14, 35, 0.49) 76.65%
+  );
+  --vui-gradient-brand: linear-gradient(310deg, #0075ff 0%, #21d4fd 100%);
+  --vui-gradient-purple: linear-gradient(310deg, #582cff 0%, #7551ff 100%);
+  --vui-gradient-success: linear-gradient(310deg, #01b574 0%, #35efa1 100%);
+
+  --vui-shadow-blue: 0 4px 20px rgba(0, 117, 255, 0.5);
+  --vui-shadow-card: 0 20px 27px rgba(0, 0, 0, 0.16);
+
+  --vui-radius-card: 20px;
+  --vui-radius-tile: 12px;
+
+  /* Series palette for charts, in Vision UI order */
+  --vui-series-1: #0075ff;
+  --vui-series-2: #21d4fd;
+  --vui-series-3: #7551ff;
+  --vui-series-4: #01b574;
+  --vui-series-5: #ffb547;
+  --vui-series-6: #e31a1a;
+}
+
+/**
+ * The glass panel that nearly every Vision UI surface is built from. The blur
+ * is large and cheap because the backdrop is a static gradient, not content.
+ */
+.nos-card {
+  background: var(--vui-gradient-card);
+  backdrop-filter: blur(120px);
+  border: 1px solid var(--border);
+  border-radius: var(--vui-radius-card);
+  padding: 20px 22px;
+  position: relative;
+  overflow: visible;
+  box-shadow: var(--vui-shadow-card);
+}
+
+/* Vision UI sets metrics in the display sans, not a mono face. */
+.font-mono-metric {
+  font-family: var(--font-geist-sans);
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--nos-text-primary);
+}
+
+.text-label-caps {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nos-text-secondary);
+}
+
+.glow-accent {
+  box-shadow: var(--vui-shadow-blue);
+}
+
+/* The fading hairline Vision UI puts under the sidebar brand row. */
+.vui-rule {
+  height: 1px;
+  border: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(224, 225, 226, 0) 0%,
+    #e0e1e2 49.52%,
+    rgba(224, 225, 226, 0) 100%
+  );
+  opacity: 0.25;
+}
+
+.vui-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 45px;
+  height: 45px;
+  border-radius: var(--vui-radius-tile);
+  flex-shrink: 0;
+  color: #ffffff;
+}

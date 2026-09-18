@@ -50,7 +50,10 @@ export function LoginForm() {
     setError(null);
 
     const supabase = createBrowserSupabase();
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
 
     if (signInError) {
       setError(signInError.message);

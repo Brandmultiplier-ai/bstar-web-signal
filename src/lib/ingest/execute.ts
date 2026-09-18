@@ -64,8 +64,28 @@ async function resolveLookback(
           : null;
   if (!table) return configured;
 
-  const { count, error } = await admin.from(table).select("*", { count: "exact", head: true });
   const filled = source === "calendly" ? 1 : 32;
-  if (error || (count ?? 0) >= filled) return configured;
-  return initial;
+
+  // Calendly is account-wide. GA4 and Search Console are per site, so a new
+  // property must still get the long first window even when another site is full.
+  if (source === "calendly") {
+    const { count, error } = await admin.from(table).select("*", { count: "exact", head: true });
+    if (error || (count ?? 0) < filled) return initial;
+    return configured;
+  }
+
+  const { data: sites, error: sitesError } = await admin
+    .from("sites")
+    .select("id")
+    .eq("is_active", true);
+  if (sitesError || !sites?.length) return initial;
+
+  for (const site of sites) {
+    const { count, error } = await admin
+      .from(table)
+      .select("*", { count: "exact", head: true })
+      .eq("site_id", site.id);
+    if (error || (count ?? 0) < filled) return initial;
+  }
+  return configured;
 }

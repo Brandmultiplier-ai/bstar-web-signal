@@ -435,17 +435,9 @@ async function ingestKeyEvents(
   group: PropertyGroup,
 ): Promise<Ga4KeyEventDaily[]> {
   const eventNames = Object.values(GA4_KEY_EVENTS).map((e) => e.gaEventName);
-
-  const rows = await runReport({
+  const request = {
     property: `properties/${group.propertyId}`,
     dateRanges: [{ startDate: ctx.window.start, endDate: ctx.window.end }],
-    dimensions: [
-      { name: "date" },
-      { name: "hostName" },
-      { name: "eventName" },
-      { name: "pagePath" },
-      { name: GA4_PLACEMENT_DIMENSION },
-    ],
     metrics: [{ name: "eventCount" }],
     dimensionFilter: {
       filter: {
@@ -453,7 +445,27 @@ async function ingestKeyEvents(
         inListFilter: { values: eventNames, caseSensitive: false },
       },
     },
-  });
+  };
+  const coreDimensions = [
+    { name: "date" },
+    { name: "hostName" },
+    { name: "eventName" },
+    { name: "pagePath" },
+  ];
+
+  let rows: Row[];
+  let hasPlacement = true;
+  try {
+    rows = await runReport({
+      ...request,
+      dimensions: [...coreDimensions, { name: GA4_PLACEMENT_DIMENSION }],
+    });
+  } catch {
+    // A property that never registered `customEvent:placement` rejects the
+    // whole report. Fall back so the named events still persist.
+    rows = await runReport({ ...request, dimensions: coreDimensions });
+    hasPlacement = false;
+  }
 
   const mapped: Ga4KeyEventDaily[] = [];
   for (const row of rows) {
@@ -470,7 +482,7 @@ async function ingestKeyEvents(
       date: fromCompactDate(dimension(row, 0)),
       event_key: eventKey,
       page_path: dimension(row, 3),
-      placement: dimension(row, 4),
+      placement: hasPlacement ? dimension(row, 4) : UNSET,
       count: metric(row, 0),
     });
   }

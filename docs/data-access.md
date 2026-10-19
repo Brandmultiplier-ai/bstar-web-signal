@@ -30,7 +30,7 @@ Do not sum `calendly_bookings`. Use `calendly_booking_classes`.
 
 | Relation | One row is | Watch-out |
 | --- | --- | --- |
-| `sites` | One property | `chrisrubincreativ` stays inactive until the rebuilt site is live. Its GA4 property is `368696015` and its Clarity project is `yv4cy3vjqc`. Do not activate it while brandmultiplier.ai still uses the one shared Clarity token |
+| `sites` | One property | `chrisrubincreativ` is active. Its GA4 property is `368696015` and its Clarity project is `yv4cy3vjqc`. The Clarity token returns one project; a second project is skipped instead of failing the pull |
 | `ingestion_runs` | One ingest attempt | `status`, `finished_at`, `error`. A failure is a row here, not a zero in a fact table |
 | `ga4_daily` | Site and date | Headline sessions |
 | `ga4_page_daily`, `ga4_landing_daily`, `ga4_source_daily`, `ga4_country_daily`, `ga4_device_daily`, `ga4_channel_daily`, `ga4_os_daily` | Site, date, and one dimension value | Top values per day, not every value. They will not sum to `ga4_daily` |

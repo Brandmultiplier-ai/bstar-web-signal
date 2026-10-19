@@ -47,17 +47,30 @@ export const clarityIngestor: Ingestor = {
       return { rowsWritten: 0, skipped };
     }
 
-    // The API token is scoped to a single project, so it can only ever serve
-    // the one shared project. More than one would need a token per project.
-    if (projectIds.length > 1) {
-      throw new Error(
-        `Clarity ingestion supports one project per token but the registry has ${projectIds.length}: ${projectIds.join(", ")}`,
-      );
-    }
-    const projectId = projectIds[0];
-
     const metrics = await fetchClarityInsights(1, ["URL"]);
     const pages = foldClarityPages(metrics);
+
+    // One API token can only return one Clarity project. When the registry
+    // lists more than one, keep the project whose hostnames are actually in
+    // this response and skip the rest. A second project needs its own token.
+    let projectId = projectIds[0];
+    if (projectIds.length > 1) {
+      const sessionsByProject = new Map<string, number>();
+      for (const page of pages) {
+        const siteId = resolveSiteId(page.host, ctx.sites);
+        const site = ctx.sites.find((item) => item.id === siteId);
+        const id = site?.clarity_project_id;
+        if (!id) continue;
+        sessionsByProject.set(id, (sessionsByProject.get(id) ?? 0) + page.sessions);
+      }
+      const ranked = [...sessionsByProject.entries()].sort((a, b) => b[1] - a[1]);
+      if (ranked[0]) projectId = ranked[0][0];
+      for (const site of ctx.sites) {
+        if (site.clarity_project_id && site.clarity_project_id !== projectId) {
+          skipped.push(site.slug);
+        }
+      }
+    }
 
     // One calendar day per pull. A 3-day aggregate stamped on yesterday would
     // overlap the next pull and inflate All time if we summed stored days.

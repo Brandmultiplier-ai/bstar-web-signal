@@ -62,6 +62,36 @@ export function DataNote({ children }: { children: React.ReactNode }) {
 
 export type Freshness = { lastSuccessAt: string | null; lastErrorAt: string | null };
 
+export type FreshnessState = "fresh" | "failing" | "stale" | "never";
+
+/**
+ * A failed or skipped pull is never described as a zero. "Late" uses the same
+ * cadence as the schedule in supabase/migrations/0004_cron.sql.
+ */
+export function describeFreshness(
+  source: IngestSource,
+  freshness?: Freshness,
+): { state: FreshnessState; message: string } {
+  const cadence = SOURCE_CADENCE_DAYS[source];
+  const lastSuccess = freshness?.lastSuccessAt ?? null;
+  const state: FreshnessState = !lastSuccess
+    ? "never"
+    : freshness?.lastErrorAt && new Date(freshness.lastErrorAt) > new Date(lastSuccess)
+      ? "failing"
+      : daysSince(lastSuccess) >= cadence
+        ? "stale"
+        : "fresh";
+
+  const message = {
+    fresh: `Updated ${formatRelative(lastSuccess)}`,
+    failing: `Last run failed. Numbers on screen are from ${formatRelative(lastSuccess)}, not a zero for the missing pull.`,
+    stale: `Overdue — last success ${formatRelative(lastSuccess)}, expected every ${cadence}d. A missed pull is not a zero.`,
+    never: "Never fetched. Empty charts are a missing pull, not a zero.",
+  }[state];
+
+  return { state, message };
+}
+
 /**
  * The mechanism that makes a failed or delayed cron run visible. Compares the
  * last successful fetch against that source's own cadence, so "late" always
@@ -74,30 +104,14 @@ export function FreshnessBadge({
   source: IngestSource;
   freshness?: Freshness;
 }) {
+  const { state, message } = describeFreshness(source, freshness);
   const cadence = SOURCE_CADENCE_DAYS[source];
-  const lastSuccess = freshness?.lastSuccessAt ?? null;
-
-  const state = !lastSuccess
-    ? "never"
-    : daysSince(lastSuccess) > cadence + 1
-      ? "stale"
-      : freshness?.lastErrorAt && new Date(freshness.lastErrorAt) > new Date(lastSuccess)
-        ? "failing"
-        : "fresh";
 
   const color = {
     fresh: "var(--nos-positive)",
     failing: "var(--nos-signal-warm)",
     stale: "var(--nos-negative)",
     never: "var(--nos-negative)",
-  }[state];
-
-  const message = {
-    fresh: `Updated ${formatRelative(lastSuccess)}`,
-    // Data is still readable, but the newest attempt did not land.
-    failing: `Updated ${formatRelative(lastSuccess)} · last run failed`,
-    stale: `Stale — updated ${formatRelative(lastSuccess)}, expected every ${cadence}d`,
-    never: "Never fetched",
   }[state];
 
   return (
@@ -140,7 +154,7 @@ export function Stat({
     <div className="flex h-full items-start justify-between gap-2 rounded-2xl border border-[var(--border)] bg-white/[0.04] px-4 py-3">
       <div className="min-w-0">
         <p className="flex items-center gap-1.5 text-label-caps">
-          <span className="truncate">{label}</span>
+          <span className="whitespace-normal leading-snug">{label}</span>
           {tip && <CardInfoButton description={tip} />}
         </p>
         <p className="mt-1 text-xl font-bold tabular-nums text-white">{value}</p>

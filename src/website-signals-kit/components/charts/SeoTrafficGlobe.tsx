@@ -207,11 +207,20 @@ export const SeoTrafficGlobe = memo(function SeoTrafficGlobe({
 
       if (countryData) {
         const t = countryData.traffic / maxTraffic;
-        const growing = countryData.trafficChange >= 0;
-        ctx.fillStyle = growing
-          ? `rgba(1,181,116,${0.25 + t * 0.5})`
-          : `rgba(227,26,26,${0.2 + t * 0.45})`;
-        ctx.strokeStyle = growing ? "rgba(53,239,161,0.7)" : "rgba(227,26,26,0.65)";
+        const growing =
+          countryData.trafficChange === null ? null : countryData.trafficChange >= 0;
+        ctx.fillStyle =
+          growing === null
+            ? `rgba(0,117,255,${0.25 + t * 0.5})`
+            : growing
+              ? `rgba(1,181,116,${0.25 + t * 0.5})`
+              : `rgba(227,26,26,${0.2 + t * 0.45})`;
+        ctx.strokeStyle =
+          growing === null
+            ? "rgba(0,117,255,0.7)"
+            : growing
+              ? "rgba(53,239,161,0.7)"
+              : "rgba(227,26,26,0.65)";
         ctx.lineWidth = 0.7;
       } else {
         // Unattributed landmass: faint blue-white, close to the particle wash
@@ -235,10 +244,10 @@ export const SeoTrafficGlobe = memo(function SeoTrafficGlobe({
         Math.cos(((c.lon - -rotation.current[0]) * Math.PI) / 180);
       if (cosAngle < 0.15) continue;
 
-      const growing = c.trafficChange >= 0;
+      const growing = c.trafficChange === null ? null : c.trafficChange >= 0;
       const r = 3 + (c.traffic / maxTraffic) * 5;
       const isActive = activeCode === c.code;
-      const dot = growing ? "53,239,161" : "227,26,26";
+      const dot = growing === null ? "0,117,255" : growing ? "53,239,161" : "227,26,26";
 
       // Soft bloom under each marker so the dots glow off the dark sphere.
       const bloom = ctx.createRadialGradient(x, y, 0, x, y, r * 3);
@@ -480,12 +489,19 @@ export const SeoTrafficGlobe = memo(function SeoTrafficGlobe({
           <p className="text-sm font-bold mt-1" style={{ fontFamily: "var(--font-geist-mono)", color: "var(--nos-text-primary)" }}>
             {fmt(tooltip.country.traffic)}
           </p>
-          <p
-            className="text-[10px] font-bold"
-            style={{ color: tooltip.country.trafficChange >= 0 ? "var(--nos-positive)" : "var(--nos-negative)" }}
-          >
-            {fmtChange(tooltip.country.trafficChange)}
-          </p>
+          {tooltip.country.trafficChange !== null && (
+            <p
+              className="text-[10px] font-bold"
+              style={{
+                color:
+                  tooltip.country.trafficChange >= 0
+                    ? "var(--nos-positive)"
+                    : "var(--nos-negative)",
+              }}
+            >
+              {fmtChange(tooltip.country.trafficChange)}
+            </p>
+          )}
           <p className="text-[9px] mt-1" style={{ color: "var(--nos-text-muted)" }}>Drag to rotate</p>
         </div>
       )}

@@ -15,6 +15,28 @@ type AnalyticsRow = {
 };
 
 const TOP_QUERIES_PER_DAY = 25;
+
+/**
+ * Impression leaders hide click-earning queries. Keep both sets. Rows already
+ * stored are never deleted; a later run only upserts.
+ */
+function keepQueryRows(bucket: GscQueryDaily[]): GscQueryDaily[] {
+  const byImpressions = [...bucket]
+    .sort((a, b) => b.impressions - a.impressions)
+    .slice(0, TOP_QUERIES_PER_DAY);
+  const byClicks = [...bucket]
+    .filter((row) => row.clicks > 0)
+    .sort((a, b) => b.clicks - a.clicks || b.impressions - a.impressions)
+    .slice(0, TOP_QUERIES_PER_DAY);
+  const seen = new Set<string>();
+  const kept: GscQueryDaily[] = [];
+  for (const row of [...byClicks, ...byImpressions]) {
+    if (seen.has(row.query)) continue;
+    seen.add(row.query);
+    kept.push(row);
+  }
+  return kept;
+}
 const API_ROW_LIMIT = 25_000;
 
 /**
@@ -102,8 +124,7 @@ async function ingestQueries(
 
   const kept: GscQueryDaily[] = [];
   for (const bucket of byDay.values()) {
-    bucket.sort((a, b) => b.impressions - a.impressions);
-    kept.push(...bucket.slice(0, TOP_QUERIES_PER_DAY));
+    kept.push(...keepQueryRows(bucket));
   }
   return kept;
 }

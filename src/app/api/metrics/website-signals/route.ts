@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   // metrics, so it has to be resolved before the behavioral KPIs can be read.
   const { data: site, error: siteError } = await supabase
     .from("sites")
-    .select("clarity_project_id, domain")
+    .select("clarity_project_id, domain, gsc_site_url")
     .eq("id", siteId)
     .maybeSingle();
 
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
   if (!site) return NextResponse.json({ error: "Unknown siteId" }, { status: 404 });
 
   try {
-    const [data, ga4, clarity, gsc] = await Promise.all([
+    const [data, ga4, clarity, gsc, calendly] = await Promise.all([
       buildWebsiteData(supabase, {
         siteId,
         range,
@@ -42,13 +42,19 @@ export async function GET(request: Request) {
         allTime: range.allTime === true,
         clarityProjectId: site.clarity_project_id,
         domain: site.domain,
+        hasSearchConsole: site.gsc_site_url !== null,
       }),
       readFreshness(supabase, "ga4"),
       readFreshness(supabase, "clarity"),
       readFreshness(supabase, "gsc"),
+      readFreshness(supabase, "calendly"),
     ]);
 
-    return NextResponse.json({ range, data, freshness: { ga4, clarity, gsc } });
+    return NextResponse.json({
+      range,
+      data,
+      freshness: { ga4, clarity, gsc, calendly },
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to build website signals" },

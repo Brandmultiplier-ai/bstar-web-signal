@@ -33,13 +33,20 @@ export function HorizontalBars({
   height?: number;
   color?: string;
 }) {
+  const shortened = data
+    .filter((row) => row.name !== "(not set)" && row.value > 0)
+    .slice(0, 8)
+    .map((row) => shortLabel(row.name));
+  const seen = new Map<string, number>();
   const rows = data
     .filter((row) => row.name !== "(not set)" && row.value > 0)
     .slice(0, 8)
-    .map((row) => ({
-      ...row,
-      label: shortLabel(row.name),
-    }));
+    .map((row, index) => {
+      const base = shortened[index] ?? shortLabel(row.name);
+      const count = (seen.get(base) ?? 0) + 1;
+      seen.set(base, count);
+      return { ...row, label: count === 1 ? base : `${base} · ${count}` };
+    });
 
   if (rows.length === 0) return null;
 

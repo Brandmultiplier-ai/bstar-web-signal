@@ -6,6 +6,16 @@ export const dynamic = "force-dynamic";
 
 const TOP_QUERIES = 20;
 
+/** Collapse spacing, case, and invisible characters so one query is one row. */
+function normalizeQuery(query: string): string {
+  return query
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
 /** Reads stored Search Console data only. Never touches the GSC API. */
 export async function GET(request: Request) {
   const auth = await requireReader();
@@ -64,14 +74,16 @@ export async function GET(request: Request) {
     { query: string; clicks: number; impressions: number; positionWeight: number }
   >();
   for (const row of queries.data ?? []) {
-    const existing = byQuery.get(row.query);
+    const key = normalizeQuery(row.query);
+    if (!key) continue;
+    const existing = byQuery.get(key);
     if (existing) {
       existing.clicks += row.clicks;
       existing.impressions += row.impressions;
       existing.positionWeight += row.avg_position * row.impressions;
     } else {
-      byQuery.set(row.query, {
-        query: row.query,
+      byQuery.set(key, {
+        query: row.query.trim(),
         clicks: row.clicks,
         impressions: row.impressions,
         positionWeight: row.avg_position * row.impressions,
@@ -79,16 +91,21 @@ export async function GET(request: Request) {
     }
   }
 
-  const topQueries = [...byQuery.values()]
-    .sort((a, b) => b.impressions - a.impressions)
-    .slice(0, TOP_QUERIES)
-    .map((row) => ({
+  const ranked = [...byQuery.values()].sort(
+    (a, b) => b.clicks - a.clicks || b.impressions - a.impressions,
+  );
+  const withClicks = ranked.filter((row) => row.clicks > 0);
+  const withoutClicks = ranked.filter((row) => row.clicks === 0);
+  const topQueries = [...withClicks, ...withoutClicks.slice(0, Math.max(0, TOP_QUERIES - withClicks.length))].map(
+    (row) => ({
       query: row.query,
       clicks: row.clicks,
       impressions: row.impressions,
       ctr: row.impressions > 0 ? row.clicks / row.impressions : 0,
       avgPosition: row.impressions > 0 ? row.positionWeight / row.impressions : 0,
-    }));
+    }),
+  );
+  const clicksInTable = topQueries.reduce((sum, row) => sum + row.clicks, 0);
 
   return NextResponse.json({
     range,
@@ -101,6 +118,7 @@ export async function GET(request: Request) {
     },
     series,
     topQueries,
+    queryCoverage: { clicksInTable, clicksTotal: clicks },
     indexStatus: indexStatus.data
       ? {
           observedOn: indexStatus.data.date,

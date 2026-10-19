@@ -9,30 +9,34 @@ import type { SectionTldr } from "@/website-signals-kit/lib/types";
 export function overviewTldr(input: {
   domain: string;
   sessions: number;
-  sessionChange: number;
+  sessionChange: number | null;
   bounceRate: number | null;
   topPage: string | null;
   topSource: string | null;
   topCountry: string | null;
   rageClickPct: number | null;
+  searchConsoleConnected: boolean;
 }): SectionTldr {
   const bounce =
-    input.bounceRate === null ? null : Math.round(input.bounceRate * 100);
+    input.bounceRate === null ? null : (input.bounceRate * 100).toFixed(1);
   const change =
-    input.sessionChange === 0
-      ? "about the same as the previous window"
-      : input.sessionChange > 0
-        ? `${input.sessionChange.toFixed(0)}% above the previous window`
-        : `${Math.abs(input.sessionChange).toFixed(0)}% below the previous window`;
+    input.sessionChange === null
+      ? "in this date range"
+      : input.sessionChange === 0
+        ? "about the same as the previous window"
+        : input.sessionChange > 0
+          ? `${input.sessionChange.toFixed(0)}% above the previous window`
+          : `${Math.abs(input.sessionChange).toFixed(0)}% below the previous window`;
 
   const parts = [
     `${input.domain} recorded ${formatNumber(input.sessions)} sessions, ${change}.`,
   ];
   if (bounce !== null) {
+    const bounceValue = Number(bounce);
     parts.push(
-      bounce >= 70
-        ? `Bounce is high at ${bounce}% — most visits leave after one page.`
-        : `Bounce sits at ${bounce}%.`,
+      bounceValue >= 70
+        ? `Bounce is high at ${bounce}% for this date range — most visits leave after one page.`
+        : `Bounce sits at ${bounce}% for this date range.`,
     );
   }
   if (input.topSource) {
@@ -51,7 +55,7 @@ export function overviewTldr(input: {
   }
 
   const actions: SectionTldr["actions"] = [];
-  if (bounce !== null && bounce >= 70 && input.topPage) {
+  if (bounce !== null && Number(bounce) >= 70 && input.topPage) {
     actions.push({
       title: `Tighten ${input.topPage}`,
       description:
@@ -70,13 +74,23 @@ export function overviewTldr(input: {
     });
   }
   if (input.topSource?.toLowerCase().includes("direct")) {
-    actions.push({
-      title: "Direct is dominating",
-      description:
-        "Direct often hides branded search, bookmarks, and dark social. Pair this with Search Console once it is connected to see the queries behind those visits.",
-      priority: "medium",
-      cta: "Open Search",
-    });
+    actions.push(
+      input.searchConsoleConnected
+        ? {
+            title: "Direct is the leading source",
+            description:
+              "Direct mixes branded search, bookmarks, and untagged visits. Search Console is already connected — open Search for the queries that earn clicks.",
+            priority: "medium",
+            cta: "Open Search",
+          }
+        : {
+            title: "Direct is the leading source",
+            description:
+              "Direct mixes branded search, bookmarks, and untagged visits. Search Console is not connected for this property, so those queries are not in this dashboard yet.",
+            priority: "medium",
+            cta: "Open Search",
+          },
+    );
   }
   if (actions.length === 0) {
     actions.push({
@@ -99,7 +113,7 @@ export const REPORT_BLURBS = {
   clarity:
     "Microsoft Clarity: how people behaved on the page — scroll, rage clicks, dead clicks, quick backs, and script errors.",
   calendly:
-    "Calendly bookings stored from the connected account. Date chips filter those saved rows. Attribution comes from UTM parameters on the booking link, not from the page domain.",
+    "Bookings from the connected Calendly account, classed as Primary (Storyline and Diagnostic), Partner (Connector Fit Call), or Founder-relayed (Quick Chat). Tests, company-domain invitees, personal calendar entries, and interviews are excluded. A reschedule counts once, on the day the original booking was created. Cancellations stay visible and are not added into those totals.",
 } as const;
 
 /** Shown at the top of every report so the API window is never a surprise. */
@@ -111,7 +125,7 @@ export const SOURCE_WINDOW_NOTES = {
   clarity:
     "Microsoft only returns yesterday on each pull. We save that day permanently. After 10 successful daily pulls this tab shows 10 days; All time shows every saved day. A missed pull cannot be recovered from Microsoft later.",
   calendly:
-    "Calendly bookings are copied into our tables and kept. Date chips only filter those stored rows — they never call Calendly live. New and cancelled meetings land when ingest runs.",
+    "Bookings are copied into our tables and kept. The date range filters the day the booking was created, not the day the meeting sits on. A failed pull is marked on this panel — it is not shown as zero bookings.",
 } as const;
 
 export const CLARITY_METRIC_DEFS = {

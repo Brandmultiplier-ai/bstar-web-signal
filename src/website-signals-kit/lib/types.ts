@@ -1,6 +1,7 @@
 export interface KPIMetric {
   value: number;
-  change: number;
+  /** Null when this period cannot be compared, or when any sibling tile cannot. */
+  change: number | null;
   sparkline: number[];
   suffix?: string;
 }
@@ -20,7 +21,7 @@ export interface CountryRow {
   name: string;
   flag: string;
   traffic: number;
-  trafficChange: number;
+  trafficChange: number | null;
   lat: number;
   lon: number;
 }
@@ -84,6 +85,13 @@ export interface WebsiteData {
   topPages: TopPage[];
   funnelSteps: FunnelStep[];
   signals: CompanySignal[];
+  /** False when any visible tile lacks a real previous window. Then no tile shows a delta. */
+  comparisons: boolean;
+  /** Sessions on country rows, the denominator for market share. */
+  countrySessions: number;
+  pagesCoverageNote?: string;
+  sourcesCoverageNote?: string;
+  marketsCoverageNote?: string;
 
   /**
    * Optional panels. Each is omitted when the backend cannot source it, and

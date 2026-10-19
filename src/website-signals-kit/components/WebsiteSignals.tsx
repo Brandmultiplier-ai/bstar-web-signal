@@ -75,13 +75,21 @@ const deviceIcon = (d: SessionRecording["device"]) => {
  * "Earnings" panels. Populated from the top country we already have, so the
  * bento gains that visual variety without inventing a metric.
  */
-function TopMarketCard({ countries }: { countries: CountryRow[] }) {
+function TopMarketCard({
+  countries,
+  countrySessions,
+  coverageNote,
+}: {
+  countries: CountryRow[];
+  countrySessions: number;
+  coverageNote?: string;
+}) {
   const top = countries[0];
   if (!top) return null;
 
-  const total = countries.reduce((sum, country) => sum + country.traffic, 0);
-  const share = total > 0 ? Math.round((top.traffic / total) * 100) : 0;
-  const growing = top.trafficChange >= 0;
+  const shareBase = countrySessions > 0 ? countrySessions : countries.reduce((sum, country) => sum + country.traffic, 0);
+  const share = shareBase > 0 ? Math.round((top.traffic / shareBase) * 100) : 0;
+  const growing = (top.trafficChange ?? 0) >= 0;
 
   return (
     <div
@@ -108,13 +116,20 @@ function TopMarketCard({ countries }: { countries: CountryRow[] }) {
         <span className="text-xs text-white/70">sessions</span>
       </p>
       <p className="mt-2 text-xs text-white/80">
-        {share}% of tracked traffic ·{" "}
-        <span className="font-bold text-white">
-          {growing ? "+" : ""}
-          {top.trafficChange}%
-        </span>{" "}
-        vs previous period
+        {share}% of sessions with a country
+        {top.trafficChange !== null && (
+          <>
+            {" "}
+            ·{" "}
+            <span className="font-bold text-white">
+              {growing ? "+" : ""}
+              {top.trafficChange}%
+            </span>{" "}
+            vs previous period
+          </>
+        )}
       </p>
+      {coverageNote && <p className="mt-2 text-[11px] leading-snug text-white/70">{coverageNote}</p>}
     </div>
   );
 }
@@ -448,7 +463,7 @@ export function WebsiteSignals({ data }: WebsiteSignalsProps) {
 
       <motion.div
         variants={itemVariants}
-        className="grid grid-cols-2 gap-5 sm:grid-cols-3 xl:grid-cols-6"
+        className="grid grid-cols-2 gap-5 md:grid-cols-3"
       >
         <KPICard
           label="Sessions"
@@ -548,7 +563,11 @@ export function WebsiteSignals({ data }: WebsiteSignalsProps) {
         </div>
 
         <div className="flex flex-col gap-5 lg:col-span-2">
-          <TopMarketCard countries={website.visitorCountries} />
+          <TopMarketCard
+            countries={website.visitorCountries}
+            countrySessions={website.countrySessions}
+            coverageNote={website.marketsCoverageNote}
+          />
 
           {readingBehavior && (
           <DashboardCard
@@ -594,7 +613,7 @@ export function WebsiteSignals({ data }: WebsiteSignalsProps) {
             <DonutChart
               data={website.trafficSources}
               title="Traffic Sources"
-              subtitle="Session origin breakdown"
+              subtitle={website.sourcesCoverageNote ?? "Session origin breakdown"}
               height={180}
             />
           </div>
@@ -623,9 +642,10 @@ export function WebsiteSignals({ data }: WebsiteSignalsProps) {
         <DashboardCard
           title="Top Pages"
           subtitle={
-            website.topPages.some((p) => p.scrollDepth !== undefined)
+            website.pagesCoverageNote ??
+            (website.topPages.some((p) => p.scrollDepth !== undefined)
               ? "Sessions · Scroll depth · Exit rate"
-              : "Ranked by sessions"
+              : "Ranked by sessions")
           }
           info="Highest-traffic pages ranked by sessions."
           className="lg:col-span-2"
@@ -714,7 +734,7 @@ export function WebsiteSignals({ data }: WebsiteSignalsProps) {
             <p className="text-label-caps mb-2">Sessions by Country</p>
             <div className="space-y-1">
               {website.visitorCountries.slice(0, 4).map((c) => {
-                const isGrowing = c.trafficChange >= 0;
+                const isGrowing = c.trafficChange !== null && c.trafficChange >= 0;
                 const maxT = Math.max(...website.visitorCountries.map((x) => x.traffic));
                 const isHighlighted = highlightedCountry === c.code;
                 return (
@@ -743,11 +763,19 @@ export function WebsiteSignals({ data }: WebsiteSignalsProps) {
                       />
                     </div>
                     <span
-                      className="text-[10px] font-bold w-8 text-right"
-                      style={{ color: isGrowing ? "var(--nos-positive)" : "var(--nos-negative)" }}
+                      className="w-8 text-right text-[10px] font-bold"
+                      style={{
+                        color:
+                          c.trafficChange === null
+                            ? "transparent"
+                            : isGrowing
+                              ? "var(--nos-positive)"
+                              : "var(--nos-negative)",
+                      }}
                     >
-                      {isGrowing ? "+" : ""}
-                      {c.trafficChange}%
+                      {c.trafficChange === null
+                        ? ""
+                        : `${isGrowing ? "+" : ""}${c.trafficChange}%`}
                     </span>
                   </div>
                 );

@@ -80,9 +80,10 @@ async function resolveLookback(
     .eq("is_active", true);
   if (sitesError || !sites?.length) return initial;
 
+  const perSiteTable = table === "ga4_daily" ? table : "gsc_daily";
   for (const site of sites) {
     const { count, error } = await admin
-      .from(table)
+      .from(perSiteTable)
       .select("*", { count: "exact", head: true })
       .eq("site_id", site.id);
     if (error || (count ?? 0) < filled) return initial;

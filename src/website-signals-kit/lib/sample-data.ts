@@ -67,6 +67,8 @@ export const sampleWebsiteData: WebsiteData = {
     { url: "/blog/pipeline-intelligence", sessions: 1900, scrollDepth: 88, exitRate: 42 },
     { url: "/integrations", sessions: 1400, scrollDepth: 54, exitRate: 31 },
   ],
+  comparisons: true,
+  countrySessions: 17380,
   funnelSteps: [
     { label: "Homepage", sessions: 18400, dropoffPct: 0 },
     { label: "Product Page", sessions: 9800, dropoffPct: 47 },

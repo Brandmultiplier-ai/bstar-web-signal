@@ -122,10 +122,9 @@ export async function GET(request: Request) {
     let weight = 0;
     let total = 0;
     for (const row of rows) {
-      if (row.value === null) continue;
-      const w = row.weight > 0 ? row.weight : 1;
-      weight += w;
-      total += row.value * w;
+      if (row.value === null || row.weight <= 0) continue;
+      weight += row.weight;
+      total += row.value * row.weight;
     }
     return weight > 0 ? total / weight : null;
   };
@@ -145,6 +144,7 @@ export async function GET(request: Request) {
       excessiveScrollPct: mean(row.excessive),
       totalTimeSeconds: mean(row.totalTime),
     }))
+    .filter((row) => row.sessions > 0)
     .sort((a, b) => b.sessions - a.sessions)
     .slice(0, 25);
 

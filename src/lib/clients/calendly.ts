@@ -9,6 +9,8 @@ export type CalendlyEvent = {
   start_time: string;
   end_time: string | null;
   created_at: string | null;
+  /** Event type URI. The slug that classifies the booking lives on this resource. */
+  event_type?: string | null;
 };
 
 export type CalendlyInvitee = {
@@ -16,6 +18,9 @@ export type CalendlyInvitee = {
   name: string | null;
   email: string | null;
   created_at: string | null;
+  rescheduled?: boolean | null;
+  old_invitee?: string | null;
+  new_invitee?: string | null;
   tracking: {
     utm_source: string | null;
     utm_medium: string | null;
@@ -102,4 +107,24 @@ export async function fetchScheduledEvents(args: {
 export async function fetchInvitees(eventUri: string): Promise<CalendlyInvitee[]> {
   const uuid = eventUri.split("/").pop()!;
   return paginate<CalendlyInvitee>(`/scheduled_events/${uuid}/invitees`, {});
+}
+
+/**
+ * Scheduling URL path is the taxonomy key (`book-crc/storyline`), which is
+ * more specific than Calendly's own `slug` field.
+ */
+export async function fetchEventSlug(eventTypeUri: string): Promise<string | null> {
+  const { resource } = await callUrl<{
+    resource: { slug?: string | null; scheduling_url?: string | null };
+  }>(eventTypeUri);
+  const schedulingUrl = resource.scheduling_url;
+  if (schedulingUrl) {
+    try {
+      const path = new URL(schedulingUrl).pathname.replace(/^\/+|\/+$/g, "");
+      if (path) return path;
+    } catch {
+      // Fall through to the resource slug.
+    }
+  }
+  return resource.slug ?? null;
 }

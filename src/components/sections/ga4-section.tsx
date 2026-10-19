@@ -20,6 +20,7 @@ import { HorizontalBars } from "@/website-signals-kit/components/charts/Horizont
 import { TrendLine } from "@/website-signals-kit/components/charts/TrendLine";
 import type { SiteSummary } from "@/lib/api-types";
 import type { DateFilter } from "@/store/dashboard-store";
+import { partialCoverage } from "@/lib/format";
 import { REPORT_BLURBS, SOURCE_WINDOW_NOTES } from "@/lib/summaries";
 
 export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilter }) {
@@ -121,7 +122,13 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
               <DonutChart
                 data={data.countries.slice(0, 6)}
                 title="Countries"
-                subtitle="Where sessions came from"
+                subtitle={
+                  partialCoverage(
+                    data.countries.slice(0, 6).reduce((sum, row) => sum + row.value, 0),
+                    data.totals.sessions,
+                    "sessions",
+                  ) ?? "Where sessions came from"
+                }
               />
             )}
           </div>
@@ -141,7 +148,13 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
                   value: row.sessions,
                 }))}
                 title="Source / medium"
-                subtitle="How people arrived"
+                subtitle={
+                  partialCoverage(
+                    data.topSources.slice(0, 6).reduce((sum, row) => sum + row.sessions, 0),
+                    data.totals.sessions,
+                    "sessions",
+                  ) ?? "How people arrived"
+                }
               />
             )}
           </div>
@@ -154,14 +167,26 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
                   value: row.sessions,
                 }))}
                 title="Landing pages"
-                subtitle="Where sessions started"
+                subtitle={
+                  partialCoverage(
+                    data.landingPages.reduce((sum, row) => sum + row.sessions, 0),
+                    data.totals.sessions,
+                    "sessions",
+                  ) ?? "Where sessions started"
+                }
               />
             )}
             {data.topPages.length > 0 && (
               <HorizontalBars
                 data={data.topPages.map((row) => ({ name: row.page_path, value: row.pageviews }))}
                 title="Top pages"
-                subtitle="Pageviews in this range"
+                subtitle={
+                  partialCoverage(
+                    data.topPages.reduce((sum, row) => sum + row.pageviews, 0),
+                    data.totals.pageviews,
+                    "pageviews",
+                  ) ?? "Pageviews in this range"
+                }
               />
             )}
           </div>

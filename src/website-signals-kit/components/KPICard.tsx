@@ -9,7 +9,7 @@ import { formatCompact } from "../lib/utils";
 interface KPICardProps {
   label: string;
   value: number;
-  change: number;
+  change: number | null;
   sparkline: number[];
   prefix?: string;
   suffix?: string;
@@ -42,9 +42,9 @@ export const KPICard = memo(function KPICard({
   invertChange = false,
   icon: Icon = Activity,
 }: KPICardProps) {
-  const isPositive = change > 0;
-  const isNeutral = change === 0;
-  const isGood = invertChange ? change < 0 : change > 0;
+  const isPositive = (change ?? 0) > 0;
+  const isNeutral = change === null || change === 0;
+  const isGood = invertChange ? (change ?? 0) < 0 : (change ?? 0) > 0;
 
   const deltaColor = isNeutral
     ? "var(--nos-text-muted)"
@@ -65,18 +65,19 @@ export const KPICard = memo(function KPICard({
     <div className={`nos-card group cursor-default select-none ${className}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-label-caps truncate">{label}</span>
+          <div className="flex items-start gap-1.5">
+            <span className="text-label-caps whitespace-normal leading-snug">{label}</span>
             <CardInfoButton description={tooltip} />
           </div>
 
           <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2">
             <span className="font-mono-metric">{formatNumber(value, prefix, suffix)}</span>
-            {/* Vision UI sets the delta as bare text beside the metric. */}
-            <span className="text-sm font-bold" style={{ color: deltaColor }}>
-              {change >= 0 ? "+" : ""}
-              {change}%
-            </span>
+            {change !== null && (
+              <span className="text-sm font-bold" style={{ color: deltaColor }}>
+                {change >= 0 ? "+" : ""}
+                {change}%
+              </span>
+            )}
           </p>
         </div>
 

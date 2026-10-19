@@ -51,10 +51,10 @@ export function comparisonPeriods(range: Period, days: number): { current: Perio
   };
 }
 
-function percentChange(current: number, previous: number): number {
-  // A rise from nothing is not a percentage; report it as flat rather than
-  // as an infinite or misleading 100% jump.
-  if (previous === 0) return 0;
+function percentChange(current: number, previous: number): number | null {
+  // A rise from nothing is not a percentage. Callers hide the delta instead
+  // of printing +0%, which reads as "unchanged".
+  if (previous === 0) return null;
   return Number((((current - previous) / previous) * 100).toFixed(1));
 }
 
@@ -84,9 +84,10 @@ function toKpi(
 ): KPIMetric {
   const current = mode === "total" ? sum(currentDaily) : mean(currentDaily);
   const previous = mode === "total" ? sum(previousDaily) : mean(previousDaily);
+  const comparable = previousDaily.length > 0 && previous !== 0;
   return {
     value: round(current, mode === "total" ? 0 : 1),
-    change: percentChange(current, previous),
+    change: comparable ? percentChange(current, previous) : null,
     sparkline: currentDaily,
     suffix,
   };
@@ -101,6 +102,7 @@ export async function buildWebsiteData(
     allTime?: boolean;
     clarityProjectId: string | null;
     domain: string;
+    hasSearchConsole: boolean;
   },
 ): Promise<WebsiteData> {
   const current = args.range;
@@ -196,10 +198,9 @@ export async function buildWebsiteData(
           let total = 0;
           for (const row of dayRows) {
             const value = pick(row);
-            if (value === null) continue;
-            const rowWeight = row.sessions > 0 ? row.sessions : 1;
-            weight += rowWeight;
-            total += value * rowWeight;
+            if (value === null || row.sessions <= 0) continue;
+            weight += row.sessions;
+            total += value * row.sessions;
           }
           return weight > 0 ? total / weight : null;
         })
@@ -371,6 +372,45 @@ export async function buildWebsiteData(
         "total",
       );
 
+  const displayedKpis = [
+    sessionKpi,
+    ...(rage.sparkline.length > 0 ? [rage] : []),
+    ...(dead.sparkline.length > 0 ? [dead] : []),
+    ...(quick.sparkline.length > 0 ? [quick] : []),
+    ...(scroll.sparkline.length > 0 ? [scroll] : []),
+    ...(jsErrors.sparkline.length > 0 ? [jsErrors] : []),
+  ];
+  // Period comparison is all or nothing. One tile at +0% beside a real delta
+  // is how a missing previous window used to masquerade as "unchanged".
+  const comparisons =
+    !args.allTime && displayedKpis.every((kpi) => kpi.change !== null);
+  if (!comparisons) {
+    for (const kpi of displayedKpis) kpi.change = null;
+  }
+
+  const countrySessions = [...countryTotals.values()].reduce(
+    (total, entry) => total + entry.currentSessions,
+    0,
+  );
+  const shownPageSessions = topPages.reduce((total, page) => total + page.sessions, 0);
+  const sourceSessions = rankedSources.reduce((total, [, value]) => total + value, 0);
+  const pagesCoverageNote =
+    totalSessions > 0 && shownPageSessions !== totalSessions
+      ? `Top ${topPages.length} pages cover ${shownPageSessions.toLocaleString("en-US")} of ${totalSessions.toLocaleString("en-US")} sessions in this range. Not a full breakdown.`
+      : undefined;
+  const sourcesCoverageNote =
+    totalSessions > 0 && sourceSessions !== totalSessions
+      ? `Source rows cover ${sourceSessions.toLocaleString("en-US")} of ${totalSessions.toLocaleString("en-US")} sessions in this range. Not a full breakdown.`
+      : undefined;
+  const marketsCoverageNote =
+    totalSessions > 0 && countrySessions !== totalSessions
+      ? `Country rows cover ${countrySessions.toLocaleString("en-US")} of ${totalSessions.toLocaleString("en-US")} sessions. The share is of sessions with a country, not of all traffic.`
+      : undefined;
+
+  if (!comparisons) {
+    for (const country of visitorCountries) country.trafficChange = null;
+  }
+
   return {
     sessions: sessionKpi,
     sessionsNote: ga4HasTraffic
@@ -389,15 +429,21 @@ export async function buildWebsiteData(
     topPages,
     funnelSteps,
     signals: [],
+    comparisons,
+    countrySessions,
+    pagesCoverageNote,
+    sourcesCoverageNote,
+    marketsCoverageNote,
     tldr: overviewTldr({
       domain: args.domain,
       sessions: sessionKpi.value,
-      sessionChange: sessionKpi.change,
+      sessionChange: comparisons ? sessionKpi.change : null,
       bounceRate: ga4HasTraffic ? bounceRate : null,
       topPage: topPages[0]?.url ?? null,
       topSource: trafficSources[0]?.name ?? null,
       topCountry: visitorCountries[0]?.name ?? null,
       rageClickPct: rage.sparkline.length > 0 ? rage.value : null,
+      searchConsoleConnected: args.hasSearchConsole,
     }),
     behaviorScopeNote: !args.clarityProjectId
       ? "No Clarity project is configured for this site."

@@ -87,6 +87,8 @@ export type GscResponse = {
     ctr: number;
     avgPosition: number;
   }>;
+  /** Clicks represented by the query table versus clicks on the daily totals. */
+  queryCoverage: { clicksInTable: number; clicksTotal: number };
   indexStatus: { observedOn: string; indexed: number; notIndexed: number } | null;
 };
 
@@ -144,7 +146,15 @@ export type ClarityResponse = {
 export type CalendlyResponse = {
   range: Range;
   freshness: Freshness;
-  totals: { bookings: number; attributed: number; cancelled: number };
+  totals: {
+    primary: number;
+    partner: number;
+    relay: number;
+    cancelled: number;
+    excluded: number;
+    attributionGaps: number;
+  };
+  byProperty: Array<{ property: string; bookings: number }>;
   series: Array<{ date: string; bookings: number }>;
   byAttribution: Array<{
     source: string;
@@ -152,17 +162,22 @@ export type CalendlyResponse = {
     campaign: string;
     bookings: number;
   }>;
+  byExclusion: Array<{ reason: string; eventName: string; bookings: number }>;
   bookings: Array<{
     uri: string;
     eventName: string | null;
+    eventSlug: string | null;
+    conversionClass: "primary" | "partner" | "relay" | "excluded";
+    property: string | null;
+    exclusionReason: string | null;
     status: string | null;
+    countedOn: string;
     scheduledAt: string;
     inviteeName: string | null;
     utmSource: string | null;
     utmMedium: string | null;
     utmCampaign: string | null;
     utmContent: string | null;
-    utmTerm: string | null;
   }>;
 };
 
@@ -170,5 +185,5 @@ export type WebsiteSignalsResponse = {
   range: Range;
   /** The kit's own data contract; imported rather than restated. */
   data: import("@/website-signals-kit/lib/types").WebsiteData;
-  freshness: { ga4: Freshness; clarity: Freshness; gsc: Freshness };
+  freshness: { ga4: Freshness; clarity: Freshness; gsc: Freshness; calendly: Freshness };
 };

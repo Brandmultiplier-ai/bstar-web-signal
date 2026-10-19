@@ -191,12 +191,18 @@ export type ClarityBreakdownDaily = {
 export type CalendlyBooking = {
   calendly_uri: string;
   event_name: string | null;
+  event_type_uri: string | null;
+  event_slug: string | null;
   status: string | null;
   scheduled_at: string;
   ended_at: string | null;
   booked_at: string | null;
   invitee_name: string | null;
   invitee_email: string | null;
+  invitee_uri: string | null;
+  rescheduled: boolean | null;
+  old_invitee_uri: string | null;
+  new_invitee_uri: string | null;
   utm_source: string | null;
   utm_medium: string | null;
   utm_campaign: string | null;

@@ -110,8 +110,13 @@ export function GscSection({ site, range }: { site: SiteSummary; range: DateFilt
 
               <div>
                 <h3 className="mb-2 text-xs font-medium text-[var(--nos-text-muted)]">
-                  Top queries
+                  Queries, click-earning first
                 </h3>
+                <p className="mb-2 text-[11px] leading-relaxed text-[var(--nos-text-muted)]">
+                  {data.queryCoverage.clicksInTable === data.queryCoverage.clicksTotal
+                    ? `These queries account for all ${formatNumber(data.queryCoverage.clicksTotal)} clicks in this range.`
+                    : `These stored queries account for ${formatNumber(data.queryCoverage.clicksInTable)} of ${formatNumber(data.queryCoverage.clicksTotal)} clicks. The daily total includes queries that were not kept. This list is not a full breakdown.`}
+                </p>
                 <SimpleTable
                   rows={data.topQueries}
                   empty="No queries stored in this range."

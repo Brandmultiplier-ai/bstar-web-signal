@@ -24,14 +24,13 @@ import {
 } from "@/store/dashboard-store";
 import { addDays, latestCompleteDay, toDateString } from "@/lib/dates";
 import { createBrowserSupabase } from "@/lib/supabase/client";
-import { formatRelative } from "@/lib/dates";
 import { Breadcrumbs, GradientRule, IconTile } from "@/components/vision";
 import { Ga4Section } from "@/components/sections/ga4-section";
 import { GscSection } from "@/components/sections/gsc-section";
 import { ClaritySection } from "@/components/sections/clarity-section";
 import { CalendlySection } from "@/components/sections/calendly-section";
 import { WebsiteSignalsSection } from "@/components/sections/website-signals-section";
-import { PanelSkeleton } from "@/components/ui";
+import { describeFreshness, PanelSkeleton, type FreshnessState } from "@/components/ui";
 import type { SiteSummary } from "@/lib/api-types";
 
 type View = "signals" | "ga4" | "gsc" | "clarity" | "calendly";
@@ -233,6 +232,7 @@ export function DashboardShell() {
         </div>
 
         <div className="mx-auto w-full max-w-[1600px] flex-1 px-6 pb-12">
+          {selectedSite && <PullAlert site={selectedSite} range={range} />}
           {view === "signals" && selectedSite && (
             <WebsiteSignalsSection site={selectedSite} range={range} />
           )}
@@ -343,14 +343,28 @@ function RangeControls() {
   );
 }
 
+const PULL_ROWS: Array<{
+  label: string;
+  source: "ga4" | "clarity" | "gsc" | "calendly";
+  show: (site: SiteSummary) => boolean;
+}> = [
+  { label: "GA4", source: "ga4", show: (site) => site.hasGa4 },
+  { label: "Clarity", source: "clarity", show: (site) => site.hasClarity },
+  { label: "Search", source: "gsc", show: (site) => site.hasSearchConsole },
+  { label: "Calendly", source: "calendly", show: () => true },
+];
+
+function pullRows(site: SiteSummary, freshness: NonNullable<ReturnType<typeof useWebsiteSignals>["data"]>["freshness"]) {
+  return PULL_ROWS.filter((row) => row.show(site)).map((row) => {
+    const described = describeFreshness(row.source, freshness[row.source]);
+    return { ...row, ...described };
+  });
+}
+
 function FreshnessCard({ site, range }: { site: SiteSummary; range: DateFilter }) {
   const { data } = useWebsiteSignals(site.id, range);
-
-  const rows = [
-    { label: "GA4", at: data?.freshness.ga4.lastSuccessAt ?? null, show: true },
-    { label: "Clarity", at: data?.freshness.clarity.lastSuccessAt ?? null, show: site.hasClarity },
-    { label: "Search", at: data?.freshness.gsc.lastSuccessAt ?? null, show: site.hasSearchConsole },
-  ].filter((row) => row.show);
+  if (!data) return null;
+  const rows = pullRows(site, data.freshness);
 
   return (
     <div className="rounded-2xl p-4" style={{ background: "var(--vui-gradient-purple)" }}>
@@ -361,14 +375,47 @@ function FreshnessCard({ site, range }: { site: SiteSummary; range: DateFilter }
         {rows.map((row) => (
           <div key={row.label} className="flex items-baseline justify-between gap-2">
             <span className="text-xs text-white/80">{row.label}</span>
-            <span className="truncate text-xs font-semibold text-white">
-              {formatRelative(row.at)}
+            <span
+              className="truncate text-xs font-semibold text-white"
+              style={row.state === "fresh" ? undefined : { color: "#ffd0d0" }}
+            >
+              {stateWord(row.state)}
             </span>
           </div>
         ))}
       </div>
     </div>
   );
+}
+
+function PullAlert({ site, range }: { site: SiteSummary; range: DateFilter }) {
+  const { data } = useWebsiteSignals(site.id, range);
+  if (!data) return null;
+  const problems = pullRows(site, data.freshness).filter((row) => row.state !== "fresh");
+  if (problems.length === 0) return null;
+
+  return (
+    <div
+      className="mb-5 rounded-2xl px-4 py-3 text-sm text-white"
+      style={{ border: "1px solid var(--nos-negative)", background: "rgba(227,26,26,0.12)" }}
+    >
+      <p className="font-semibold">A scheduled pull failed or is overdue.</p>
+      <ul className="mt-1 space-y-1 text-xs text-white/80">
+        {problems.map((row) => (
+          <li key={row.source}>
+            {row.label}: {row.message}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function stateWord(state: FreshnessState): string {
+  if (state === "failing") return "Failed";
+  if (state === "stale") return "Overdue";
+  if (state === "never") return "Never";
+  return "Fresh";
 }
 
 function RefreshButton() {

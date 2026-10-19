@@ -125,7 +125,7 @@ export async function GET(request: Request) {
     avgSessionDuration: row.avg_session_duration,
     engagementRate:
       row.sessions > 0 ? (row.engaged_sessions ?? 0) / row.sessions : null,
-  }));
+  })).filter((row) => !(row.sessions === 0 && (row.users ?? 0) > 0));
 
   const landingPages = rank(
     landings.data ?? [],
@@ -149,7 +149,7 @@ export async function GET(request: Request) {
     bounceRate: row.bounce_rate,
     avgSessionDuration: row.avg_session_duration,
     engagementRate: row.sessions > 0 ? row.engaged_sessions / row.sessions : null,
-  }));
+  })).filter((row) => !(row.sessions === 0 && row.users > 0));
 
   const topSources = rank(
     sources.data ?? [],

@@ -1,5 +1,6 @@
 import {
   fetchCurrentUser,
+  fetchEventSlug,
   fetchInvitees,
   fetchScheduledEvents,
   type CalendlyEvent,
@@ -42,17 +43,31 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-function toBooking(event: CalendlyEvent, invitee: CalendlyInvitee | undefined): CalendlyBooking {
+function primaryInvitee(invitees: CalendlyInvitee[]): CalendlyInvitee | undefined {
+  return invitees.find((invitee) => invitee.old_invitee || invitee.new_invitee) ?? invitees[0];
+}
+
+function toBooking(
+  event: CalendlyEvent,
+  invitee: CalendlyInvitee | undefined,
+  eventSlug: string | null,
+): CalendlyBooking {
   const tracking = invitee?.tracking ?? null;
   return {
     calendly_uri: event.uri,
     event_name: event.name,
+    event_type_uri: event.event_type ?? null,
+    event_slug: eventSlug,
     status: event.status,
     scheduled_at: event.start_time,
     ended_at: event.end_time,
     booked_at: invitee?.created_at ?? event.created_at,
     invitee_name: invitee?.name ?? null,
     invitee_email: invitee?.email ?? null,
+    invitee_uri: invitee?.uri ?? null,
+    rescheduled: invitee?.rescheduled ?? null,
+    old_invitee_uri: invitee?.old_invitee ?? null,
+    new_invitee_uri: invitee?.new_invitee ?? null,
     utm_source: tracking?.utm_source ?? null,
     utm_medium: tracking?.utm_medium ?? null,
     utm_campaign: tracking?.utm_campaign ?? null,
@@ -100,7 +115,23 @@ export const calendlyIngestor: Ingestor = {
       }
     });
 
-    const bookings = events.map((event, index) => toBooking(event, inviteeLists[index][0]));
+    const slugByType = new Map<string, string | null>();
+    const eventTypes = [...new Set(events.map((event) => event.event_type).filter(Boolean))] as string[];
+    await mapWithConcurrency(eventTypes, INVITEE_CONCURRENCY, async (eventTypeUri) => {
+      try {
+        slugByType.set(eventTypeUri, await fetchEventSlug(eventTypeUri));
+      } catch {
+        slugByType.set(eventTypeUri, null);
+      }
+    });
+
+    const bookings = events.map((event, index) =>
+      toBooking(
+        event,
+        primaryInvitee(inviteeLists[index] ?? []),
+        event.event_type ? (slugByType.get(event.event_type) ?? null) : null,
+      ),
+    );
 
     const rowsWritten = await upsertRows(
       ctx.admin,

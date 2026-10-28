@@ -224,6 +224,21 @@ export type Rb2bVisitor = {
   raw: unknown;
 };
 
+/** Anonymous form webhook. No personal fields. Service role is the only writer. */
+export type FormCapture = {
+  id: string;
+  form_id: string;
+  intent: string | null;
+  page_url: string | null;
+  site_domain: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_content: string | null;
+  submitted_at: string | null;
+  received_at: string;
+};
+
 export type SourceFreshness = {
   source: IngestSource;
   site_id: string | null;
@@ -262,6 +277,7 @@ export type Database = {
       clarity_breakdown_daily: Table<ClarityBreakdownDaily>;
       calendly_bookings: Table<CalendlyBooking, Partial<CalendlyBooking>>;
       rb2b_visitors: Table<Rb2bVisitor, Partial<Rb2bVisitor>>;
+      form_captures: Table<FormCapture, Partial<FormCapture> & Pick<FormCapture, "form_id">>;
     };
     Views: {
       source_freshness: { Row: SourceFreshness; Relationships: [] };

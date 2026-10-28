@@ -17,6 +17,7 @@ export const env = {
   supabaseAnonKey: () => required("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
   supabaseServiceRoleKey: () => required("SUPABASE_SERVICE_ROLE_KEY"),
   ingestSecret: () => required("INGEST_SECRET"),
+  captureWebhookSecret: () => required("CAPTURE_WEBHOOK_SECRET"),
   googleServiceAccountEmail: () => required("GOOGLE_SERVICE_ACCOUNT_EMAIL"),
   // Secret managers and .env files both tend to store the PEM with literal
   // backslash-n rather than real newlines; Google's JWT signer needs real ones.

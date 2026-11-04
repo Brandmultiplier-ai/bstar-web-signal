@@ -155,11 +155,16 @@ export type CalendlyResponse = {
     attributionGaps: number;
   };
   byProperty: Array<{ property: string; bookings: number }>;
-  series: Array<{ date: string; bookings: number }>;
+  series: Array<{
+    date: string;
+    conversionClass: "primary" | "partner" | "relay" | "excluded";
+    bookings: number;
+  }>;
   byAttribution: Array<{
     source: string;
     medium: string;
     campaign: string;
+    conversionClass: "primary" | "partner" | "relay" | "excluded";
     bookings: number;
   }>;
   byExclusion: Array<{ reason: string; eventName: string; bookings: number }>;
@@ -178,6 +183,7 @@ export type CalendlyResponse = {
     utmMedium: string | null;
     utmCampaign: string | null;
     utmContent: string | null;
+    utmTerm: string | null;
   }>;
 };
 

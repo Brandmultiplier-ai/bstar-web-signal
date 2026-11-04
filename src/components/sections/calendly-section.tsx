@@ -108,6 +108,10 @@ export function CalendlySection({ range }: { range: DateFilter }) {
               rows={data.byAttribution}
               empty="No Primary or Partner bookings in this range."
               columns={[
+                {
+                  header: "Class",
+                  cell: (row) => CLASS_LABEL[row.conversionClass],
+                },
                 { header: "Source", cell: (row) => row.source },
                 { header: "Medium", cell: (row) => row.medium },
                 { header: "Campaign", cell: (row) => row.campaign },
@@ -135,6 +139,7 @@ export function CalendlySection({ range }: { range: DateFilter }) {
                 { header: "Event", cell: (row) => row.eventName ?? "—" },
                 { header: "Invitee", cell: (row) => row.inviteeName ?? "—" },
                 { header: "Source", cell: (row) => row.utmSource ?? "—" },
+                { header: "Term", cell: (row) => row.utmTerm ?? "—" },
                 { header: "Status", cell: (row) => row.status ?? "—" },
               ]}
             />

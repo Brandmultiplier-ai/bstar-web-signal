@@ -51,17 +51,31 @@ export async function GET(request: Request) {
 
   const byAttribution = new Map<
     string,
-    { source: string; medium: string; campaign: string; bookings: number }
+    {
+      source: string;
+      medium: string;
+      campaign: string;
+      conversionClass: ConversionClass;
+      bookings: number;
+    }
   >();
   for (const row of headline) {
     if (row.conversionClass === "relay") continue;
     const source = row.utm_source ?? UNATTRIBUTED;
     const medium = row.utm_medium ?? UNATTRIBUTED;
     const campaign = row.utm_campaign ?? UNATTRIBUTED;
-    const key = `${source}|${medium}|${campaign}`;
+    const key = `${row.conversionClass}|${source}|${medium}|${campaign}`;
     const existing = byAttribution.get(key);
     if (existing) existing.bookings += 1;
-    else byAttribution.set(key, { source, medium, campaign, bookings: 1 });
+    else {
+      byAttribution.set(key, {
+        source,
+        medium,
+        campaign,
+        conversionClass: row.conversionClass,
+        bookings: 1,
+      });
+    }
   }
 
   const byProperty = new Map<string, number>();
@@ -80,9 +94,12 @@ export async function GET(request: Request) {
     else byExclusion.set(key, { reason, eventName, bookings: 1 });
   }
 
-  const byDay = new Map<string, number>();
+  const byDay = new Map<string, { date: string; conversionClass: ConversionClass; bookings: number }>();
   for (const row of headline) {
-    byDay.set(row.countedOn, (byDay.get(row.countedOn) ?? 0) + 1);
+    const key = `${row.countedOn}|${row.conversionClass}`;
+    const existing = byDay.get(key);
+    if (existing) existing.bookings += 1;
+    else byDay.set(key, { date: row.countedOn, conversionClass: row.conversionClass, bookings: 1 });
   }
 
   const toList = (row: ClassifiedBooking) => ({
@@ -100,6 +117,7 @@ export async function GET(request: Request) {
     utmMedium: row.utm_medium,
     utmCampaign: row.utm_campaign,
     utmContent: row.utm_content,
+    utmTerm: row.utm_term,
   });
 
   return NextResponse.json({
@@ -116,9 +134,9 @@ export async function GET(request: Request) {
     byProperty: [...byProperty.entries()]
       .map(([property, bookings]) => ({ property, bookings }))
       .sort((a, b) => b.bookings - a.bookings),
-    series: [...byDay.entries()]
-      .map(([date, bookings]) => ({ date, bookings }))
-      .sort((a, b) => a.date.localeCompare(b.date)),
+    series: [...byDay.values()].sort((a, b) =>
+      a.date === b.date ? a.conversionClass.localeCompare(b.conversionClass) : a.date.localeCompare(b.date),
+    ),
     byAttribution: [...byAttribution.values()].sort((a, b) => b.bookings - a.bookings),
     byExclusion: [...byExclusion.values()].sort((a, b) => b.bookings - a.bookings),
     bookings: [...headline, ...cancelled]

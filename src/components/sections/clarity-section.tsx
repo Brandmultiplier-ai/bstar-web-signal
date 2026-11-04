@@ -20,7 +20,18 @@ import { HorizontalBars } from "@/website-signals-kit/components/charts/Horizont
 import { TrendLine } from "@/website-signals-kit/components/charts/TrendLine";
 import type { SiteSummary } from "@/lib/api-types";
 import type { DateFilter } from "@/store/dashboard-store";
+import { partialCoverage } from "@/lib/format";
 import { CLARITY_METRIC_DEFS, REPORT_BLURBS, SOURCE_WINDOW_NOTES } from "@/lib/summaries";
+
+/** Donut and bar charts draw at most this many rows. Coverage uses the same cut. */
+const CHART_ROWS = 8;
+
+function shownSum(rows: Array<{ value: number }>): number {
+  return rows
+    .filter((row) => row.value > 0)
+    .slice(0, CHART_ROWS)
+    .reduce((sum, row) => sum + row.value, 0);
+}
 
 export function ClaritySection({
   site,
@@ -31,6 +42,13 @@ export function ClaritySection({
 }) {
   const { data, isLoading, error } = useClarity(range, site?.id);
 
+  const pageCoverage = data
+    ? partialCoverage(
+        data.topPages.reduce((sum, row) => sum + row.sessions, 0),
+        data.totals.sessions,
+        "sessions",
+      )
+    : null;
   const hasRage = data?.totals.rageClickPct !== null;
   const hasDead = data?.totals.deadClickPct !== null;
   const hasQuick = data?.totals.quickBackPct !== null;
@@ -177,33 +195,70 @@ export function ClaritySection({
 
           <div className="grid items-start gap-5 md:grid-cols-3">
             {data.devices.length > 0 && (
-              <DonutChart data={data.devices} title="Device" subtitle="Clarity sessions" />
+              <DonutChart
+                data={data.devices}
+                title="Device"
+                subtitle={
+                  partialCoverage(shownSum(data.devices), data.totals.sessions, "sessions") ??
+                  "Clarity sessions"
+                }
+              />
             )}
             {data.browsers.length > 0 && (
-              <DonutChart data={data.browsers} title="Browser" subtitle="Clarity sessions" />
+              <DonutChart
+                data={data.browsers}
+                title="Browser"
+                subtitle={
+                  partialCoverage(shownSum(data.browsers), data.totals.sessions, "sessions") ??
+                  "Clarity sessions"
+                }
+              />
             )}
             {data.operatingSystems.length > 0 && (
               <DonutChart
                 data={data.operatingSystems}
                 title="Operating system"
-                subtitle="Clarity sessions"
+                subtitle={
+                  partialCoverage(
+                    shownSum(data.operatingSystems),
+                    data.totals.sessions,
+                    "sessions",
+                  ) ?? "Clarity sessions"
+                }
               />
             )}
           </div>
 
           <div className="grid items-start gap-5 md:grid-cols-3">
             {data.sources.length > 0 && (
-              <DonutChart data={data.sources} title="Traffic source" subtitle="Clarity source" />
+              <DonutChart
+                data={data.sources}
+                title="Traffic source"
+                subtitle={
+                  partialCoverage(shownSum(data.sources), data.totals.sessions, "sessions") ??
+                  "Clarity source"
+                }
+              />
             )}
             {data.countries.length > 0 && (
               <DonutChart
-                data={data.countries.slice(0, 8)}
+                data={data.countries}
                 title="Countries"
-                subtitle="Clarity sessions"
+                subtitle={
+                  partialCoverage(shownSum(data.countries), data.totals.sessions, "sessions") ??
+                  "Clarity sessions"
+                }
               />
             )}
             {data.byHost.length > 1 && (
-              <DonutChart data={data.byHost} title="By site" subtitle="Sessions on each host" />
+              <DonutChart
+                data={data.byHost}
+                title="By site"
+                subtitle={
+                  partialCoverage(shownSum(data.byHost), data.totals.sessions, "sessions") ??
+                  "Sessions on each host"
+                }
+              />
             )}
           </div>
 
@@ -214,7 +269,13 @@ export function ClaritySection({
                 value: row.sessions,
               }))}
               title="Busiest pages"
-              subtitle="Sessions, split by hostname"
+              subtitle={
+                partialCoverage(
+                  shownSum(data.topPages.map((row) => ({ value: row.sessions }))),
+                  data.totals.sessions,
+                  "sessions",
+                ) ?? "Sessions, split by hostname"
+              }
               color="#21d4fd"
             />
           )}
@@ -223,6 +284,11 @@ export function ClaritySection({
             <h3 className="mb-2 text-xs font-medium text-[var(--nos-text-muted)]">
               Page behaviour
             </h3>
+            {pageCoverage && (
+              <p className="mb-2 text-[11px] leading-relaxed text-[var(--nos-text-muted)]">
+                {pageCoverage}
+              </p>
+            )}
             <SimpleTable
               rows={data.topPages}
               empty="No Clarity pages stored in this range yet."

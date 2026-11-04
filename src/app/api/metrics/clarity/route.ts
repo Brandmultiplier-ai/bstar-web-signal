@@ -4,11 +4,18 @@ import { parseRange, readFreshness, requireReader } from "@/lib/read/request";
 
 export const dynamic = "force-dynamic";
 
+/** Stored key for the shared project. It is real data, not a missing id. */
+const SHARED_CLARITY_PROJECT = "CLARITY_SHARED_PROJECT_ID";
+
 /**
  * Reads stored Clarity data only. Date changes never call Microsoft.
  *
- * Pages are stored with host, so the shared project is split per site in this
- * response even though the upstream API is one project.
+ * Daily totals and breakdowns follow the selected site's `clarity_project_id`,
+ * the same key the Overview uses. `CLARITY_SHARED_PROJECT_ID` still matches
+ * when that is the site's id. Page rows are limited to the site, and a site
+ * whose own project id differs still keeps page history stored under the
+ * shared id. Those pages fill the daily series only when this project has
+ * no daily rows, so another project's days are not shown.
  */
 export async function GET(request: Request) {
   const auth = await requireReader();
@@ -19,29 +26,59 @@ export async function GET(request: Request) {
   const siteId = url.searchParams.get("siteId");
   const { supabase } = auth;
 
+  let projectId: string | null = null;
+  if (siteId) {
+    const site = await supabase
+      .from("sites")
+      .select("clarity_project_id")
+      .eq("id", siteId)
+      .maybeSingle();
+    if (site.error) return NextResponse.json({ error: site.error.message }, { status: 500 });
+    projectId = site.data?.clarity_project_id ?? null;
+  }
+
   const [daily, pages, breakdowns, sites, freshness] = await Promise.all([
-    supabase
-      .from("clarity_daily")
-      .select("*")
-      .gte("date", range.start)
-      .lte("date", range.end)
-      .order("date"),
+    (() => {
+      let query = supabase
+        .from("clarity_daily")
+        .select("*")
+        .gte("date", range.start)
+        .lte("date", range.end)
+        .order("date");
+      if (siteId) query = query.eq("clarity_project_id", projectId ?? "");
+      return query;
+    })(),
     (() => {
       let query = supabase
         .from("clarity_page_daily")
         .select(
-          "host, page_path, site_id, sessions, distinct_users, scroll_depth_pct, active_time_seconds, total_time_seconds, rage_click_pct, dead_click_pct, quick_back_pct, script_error_pct, excessive_scroll_pct",
+          "date, host, page_path, site_id, sessions, distinct_users, scroll_depth_pct, active_time_seconds, total_time_seconds, rage_click_pct, dead_click_pct, quick_back_pct, script_error_pct, excessive_scroll_pct",
         )
         .gte("date", range.start)
         .lte("date", range.end);
-      if (siteId) query = query.eq("site_id", siteId);
+      if (siteId) {
+        query = query.eq("site_id", siteId);
+        const projectIds = projectId
+          ? projectId === SHARED_CLARITY_PROJECT
+            ? [SHARED_CLARITY_PROJECT]
+            : [projectId, SHARED_CLARITY_PROJECT]
+          : [];
+        query =
+          projectIds.length === 0
+            ? query.eq("clarity_project_id", "")
+            : query.in("clarity_project_id", projectIds);
+      }
       return query;
     })(),
-    supabase
-      .from("clarity_breakdown_daily")
-      .select("dimension, key, sessions")
-      .gte("date", range.start)
-      .lte("date", range.end),
+    (() => {
+      let query = supabase
+        .from("clarity_breakdown_daily")
+        .select("dimension, key, sessions")
+        .gte("date", range.start)
+        .lte("date", range.end);
+      if (siteId) query = query.eq("clarity_project_id", projectId ?? "");
+      return query;
+    })(),
     supabase
       .from("sites")
       .select("domain, clarity_project_id")
@@ -53,7 +90,7 @@ export async function GET(request: Request) {
   const error = daily.error ?? pages.error ?? breakdowns.error;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const series = (daily.data ?? []).map((row) => ({
+  let series = (daily.data ?? []).map((row) => ({
     date: row.date,
     sessions: row.sessions,
     uniqueUsers: row.unique_users,
@@ -65,6 +102,12 @@ export async function GET(request: Request) {
     activeTimeSeconds: row.active_time_seconds,
     scriptErrorPct: row.script_error_pct,
   }));
+
+  // This site's project has no daily rows. Use its own stored pages, including
+  // history kept under the shared project id, instead of another project's days.
+  if (siteId && series.length === 0) {
+    series = seriesFromPages(pages.data ?? []);
+  }
 
   const averageOf = (pick: (row: (typeof series)[number]) => number | null) => {
     const values = series.map(pick).filter((value): value is number => value !== null);
@@ -194,4 +237,101 @@ export async function GET(request: Request) {
       .sort((a, b) => b.value - a.value),
     topPages,
   });
+}
+
+type PageDay = {
+  date: string;
+  sessions: number;
+  distinct_users: number;
+  rage_click_pct: number | null;
+  dead_click_pct: number | null;
+  excessive_scroll_pct: number | null;
+  quick_back_pct: number | null;
+  scroll_depth_pct: number | null;
+  active_time_seconds: number | null;
+  script_error_pct: number | null;
+};
+
+/** Site-scoped days from stored pages. Rates are session-weighted within the day. */
+function seriesFromPages(rows: PageDay[]) {
+  const byDate = new Map<
+    string,
+    {
+      sessions: number;
+      users: number;
+      rage: number;
+      rageW: number;
+      dead: number;
+      deadW: number;
+      excessive: number;
+      excessiveW: number;
+      quick: number;
+      quickW: number;
+      scroll: number;
+      scrollW: number;
+      active: number;
+      activeW: number;
+      script: number;
+      scriptW: number;
+    }
+  >();
+
+  for (const row of rows) {
+    const bucket = byDate.get(row.date) ?? {
+      sessions: 0,
+      users: 0,
+      rage: 0,
+      rageW: 0,
+      dead: 0,
+      deadW: 0,
+      excessive: 0,
+      excessiveW: 0,
+      quick: 0,
+      quickW: 0,
+      scroll: 0,
+      scrollW: 0,
+      active: 0,
+      activeW: 0,
+      script: 0,
+      scriptW: 0,
+    };
+    bucket.sessions += row.sessions;
+    bucket.users += row.distinct_users;
+    const weight = row.sessions;
+    const add = (value: number | null, sum: number, seen: number): [number, number] =>
+      value === null || weight <= 0 ? [sum, seen] : [sum + value * weight, seen + weight];
+    [bucket.rage, bucket.rageW] = add(row.rage_click_pct, bucket.rage, bucket.rageW);
+    [bucket.dead, bucket.deadW] = add(row.dead_click_pct, bucket.dead, bucket.deadW);
+    [bucket.excessive, bucket.excessiveW] = add(
+      row.excessive_scroll_pct,
+      bucket.excessive,
+      bucket.excessiveW,
+    );
+    [bucket.quick, bucket.quickW] = add(row.quick_back_pct, bucket.quick, bucket.quickW);
+    [bucket.scroll, bucket.scrollW] = add(row.scroll_depth_pct, bucket.scroll, bucket.scrollW);
+    [bucket.active, bucket.activeW] = add(
+      row.active_time_seconds,
+      bucket.active,
+      bucket.activeW,
+    );
+    [bucket.script, bucket.scriptW] = add(row.script_error_pct, bucket.script, bucket.scriptW);
+    byDate.set(row.date, bucket);
+  }
+
+  const rate = (sum: number, weight: number) => (weight > 0 ? sum / weight : null);
+
+  return [...byDate.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, bucket]) => ({
+      date,
+      sessions: bucket.sessions,
+      uniqueUsers: bucket.users,
+      rageClickPct: rate(bucket.rage, bucket.rageW),
+      deadClickPct: rate(bucket.dead, bucket.deadW),
+      excessiveScrollPct: rate(bucket.excessive, bucket.excessiveW),
+      quickBackPct: rate(bucket.quick, bucket.quickW),
+      scrollDepthPct: rate(bucket.scroll, bucket.scrollW),
+      activeTimeSeconds: rate(bucket.active, bucket.activeW),
+      scriptErrorPct: rate(bucket.script, bucket.scriptW),
+    }));
 }

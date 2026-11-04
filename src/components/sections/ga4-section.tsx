@@ -21,6 +21,23 @@ import { TrendLine } from "@/website-signals-kit/components/charts/TrendLine";
 import type { SiteSummary } from "@/lib/api-types";
 import type { DateFilter } from "@/store/dashboard-store";
 import { partialCoverage } from "@/lib/format";
+
+/** Donut and bar charts draw at most this many rows. Coverage uses the same cut. */
+const CHART_ROWS = 8;
+
+function shownSum(rows: Array<{ value: number }>): number {
+  return rows
+    .filter((row) => row.value > 0)
+    .slice(0, CHART_ROWS)
+    .reduce((sum, row) => sum + row.value, 0);
+}
+
+function CoverageLine({ text }: { text: string | null }) {
+  if (!text) return null;
+  return (
+    <p className="mb-2 text-[11px] leading-relaxed text-[var(--nos-text-muted)]">{text}</p>
+  );
+}
 import { REPORT_BLURBS, SOURCE_WINDOW_NOTES } from "@/lib/summaries";
 
 export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilter }) {
@@ -113,10 +130,24 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
 
           <div className="grid items-start gap-5 md:grid-cols-3">
             {data.devices.length > 0 && (
-              <DonutChart data={data.devices} title="Device mix" subtitle="Share of sessions" />
+              <DonutChart
+                data={data.devices}
+                title="Device mix"
+                subtitle={
+                  partialCoverage(shownSum(data.devices), data.totals.sessions, "sessions") ??
+                  "Share of sessions"
+                }
+              />
             )}
             {data.channels.length > 0 && (
-              <DonutChart data={data.channels} title="Channels" subtitle="Default channel group" />
+              <DonutChart
+                data={data.channels}
+                title="Channels"
+                subtitle={
+                  partialCoverage(shownSum(data.channels), data.totals.sessions, "sessions") ??
+                  "Default channel group"
+                }
+              />
             )}
             {data.countries.length > 0 && (
               <DonutChart
@@ -136,9 +167,15 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
           <div className="grid items-start gap-5 md:grid-cols-2">
             {(data.operatingSystems ?? []).length > 0 && (
               <DonutChart
-                data={data.operatingSystems.slice(0, 8)}
+                data={data.operatingSystems}
                 title="Operating system"
-                subtitle="Windows, macOS, iOS, Android"
+                subtitle={
+                  partialCoverage(
+                    shownSum(data.operatingSystems),
+                    data.totals.sessions,
+                    "sessions",
+                  ) ?? "Windows, macOS, iOS, Android"
+                }
               />
             )}
             {data.topSources.length > 0 && (
@@ -169,7 +206,9 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
                 title="Landing pages"
                 subtitle={
                   partialCoverage(
-                    data.landingPages.reduce((sum, row) => sum + row.sessions, 0),
+                    shownSum(
+                      data.landingPages.map((row) => ({ value: row.sessions })),
+                    ),
                     data.totals.sessions,
                     "sessions",
                   ) ?? "Where sessions started"
@@ -182,7 +221,7 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
                 title="Top pages"
                 subtitle={
                   partialCoverage(
-                    data.topPages.reduce((sum, row) => sum + row.pageviews, 0),
+                    shownSum(data.topPages.map((row) => ({ value: row.pageviews }))),
                     data.totals.pageviews,
                     "pageviews",
                   ) ?? "Pageviews in this range"
@@ -195,6 +234,13 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
             <h3 className="mb-2 text-xs font-medium text-[var(--nos-text-muted)]">
               Landing page detail
             </h3>
+            <CoverageLine
+              text={partialCoverage(
+                data.landingPages.reduce((sum, row) => sum + row.sessions, 0),
+                data.totals.sessions,
+                "sessions",
+              )}
+            />
             <SimpleTable
               rows={data.landingPages ?? []}
               empty="No landing pages stored in this range yet."
@@ -223,6 +269,13 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
 
           <div>
             <h3 className="mb-2 text-xs font-medium text-[var(--nos-text-muted)]">Page detail</h3>
+            <CoverageLine
+              text={partialCoverage(
+                data.topPages.reduce((sum, row) => sum + row.pageviews, 0),
+                data.totals.pageviews,
+                "pageviews",
+              )}
+            />
             <SimpleTable
               rows={data.topPages}
               columns={[

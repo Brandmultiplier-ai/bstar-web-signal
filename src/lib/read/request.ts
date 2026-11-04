@@ -11,6 +11,7 @@ import {
 } from "@/lib/dates";
 import { createServerSupabase } from "@/lib/supabase/server";
 import type { IngestSource } from "@/lib/database.types";
+import { abandonedRunAt, deliveryFailureAt, latestIso } from "@/lib/freshness";
 import type { ReaderClient } from "@/lib/supabase/types";
 
 export type ReadRange = { start: string; end: string; allTime?: boolean };
@@ -62,27 +63,69 @@ export async function requireReader(): Promise<
   return { ok: true, supabase };
 }
 
+const deliveryByClient = new WeakMap<ReaderClient, Promise<Map<IngestSource, string>>>();
+
 /**
- * When a source's data was last fetched successfully. Shown next to every
- * section so a failed or delayed cron run is visible rather than silently
- * stale. `site_id` is ignored for sources that are not stored per site.
+ * Cron and HTTP failures that never opened an ingestion_runs row. The RPC is
+ * added in supabase/migrations/0019_ingest_delivery_status.sql. Until that
+ * migration is applied the call errors and this returns an empty map, so the
+ * badges still work from ingestion_runs alone.
+ */
+function deliveryFailures(supabase: ReaderClient): Promise<Map<IngestSource, string>> {
+  const cached = deliveryByClient.get(supabase);
+  if (cached) return cached;
+
+  const pending = (async () => {
+    const map = new Map<IngestSource, string>();
+    const { data, error } = await supabase.rpc("ingest_delivery_status");
+    if (error || !data) return map;
+    for (const row of data) {
+      if (
+        row.source !== "ga4" &&
+        row.source !== "gsc" &&
+        row.source !== "clarity" &&
+        row.source !== "calendly"
+      ) {
+        continue;
+      }
+      const at = deliveryFailureAt(row);
+      if (at) map.set(row.source, at);
+    }
+    return map;
+  })();
+
+  deliveryByClient.set(supabase, pending);
+  return pending;
+}
+
+/**
+ * When a source's data was last fetched successfully, and when the latest
+ * attempt failed. A cron/HTTP failure, an ingestion error, or a run left
+ * open past the HTTP timeout all count. A finished success with no new rows
+ * stays a success, so a real zero is not painted as a failed pull.
  */
 export async function readFreshness(
   supabase: ReaderClient,
   source: IngestSource,
 ): Promise<{ lastSuccessAt: string | null; lastErrorAt: string | null }> {
-  const { data } = await supabase
-    .from("ingestion_runs")
-    .select("status, finished_at")
-    .eq("source", source)
-    .not("finished_at", "is", null)
-    .order("finished_at", { ascending: false })
-    .limit(200);
+  const [runs, delivery] = await Promise.all([
+    supabase
+      .from("ingestion_runs")
+      .select("status, started_at, finished_at")
+      .eq("source", source)
+      .order("started_at", { ascending: false })
+      .limit(200),
+    deliveryFailures(supabase),
+  ]);
 
-  const rows = data ?? [];
+  const rows = runs.data ?? [];
   return {
     lastSuccessAt: rows.find((row) => row.status === "success")?.finished_at ?? null,
-    lastErrorAt: rows.find((row) => row.status === "error")?.finished_at ?? null,
+    lastErrorAt: latestIso([
+      rows.find((row) => row.status === "error")?.finished_at,
+      abandonedRunAt(rows[0]),
+      delivery.get(source),
+    ]),
   };
 }
 

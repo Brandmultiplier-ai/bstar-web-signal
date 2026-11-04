@@ -1,9 +1,12 @@
 "use client";
 
-import { formatRelative, daysSince } from "@/lib/dates";
-import { SOURCE_CADENCE_DAYS, SOURCE_LABELS } from "@/lib/sources";
 import type { IngestSource } from "@/lib/database.types";
+import { describeFreshness, SOURCE_CHIP, type Freshness } from "@/lib/freshness";
+import { SOURCE_CADENCE_DAYS, SOURCE_LABELS } from "@/lib/sources";
 import { CardInfoButton } from "@/website-signals-kit/components/CardInfoButton";
+
+export type { Freshness, FreshnessState } from "@/lib/freshness";
+export { describeFreshness } from "@/lib/freshness";
 
 export function Panel({
   title,
@@ -60,42 +63,10 @@ export function DataNote({ children }: { children: React.ReactNode }) {
   );
 }
 
-export type Freshness = { lastSuccessAt: string | null; lastErrorAt: string | null };
-
-export type FreshnessState = "fresh" | "failing" | "stale" | "never";
-
 /**
- * A failed or skipped pull is never described as a zero. "Late" uses the same
- * cadence as the schedule in supabase/migrations/0004_cron.sql.
- */
-export function describeFreshness(
-  source: IngestSource,
-  freshness?: Freshness,
-): { state: FreshnessState; message: string } {
-  const cadence = SOURCE_CADENCE_DAYS[source];
-  const lastSuccess = freshness?.lastSuccessAt ?? null;
-  const state: FreshnessState = !lastSuccess
-    ? "never"
-    : freshness?.lastErrorAt && new Date(freshness.lastErrorAt) > new Date(lastSuccess)
-      ? "failing"
-      : daysSince(lastSuccess) >= cadence
-        ? "stale"
-        : "fresh";
-
-  const message = {
-    fresh: `Updated ${formatRelative(lastSuccess)}`,
-    failing: `Last run failed. Numbers on screen are from ${formatRelative(lastSuccess)}, not a zero for the missing pull.`,
-    stale: `Overdue — last success ${formatRelative(lastSuccess)}, expected every ${cadence}d. A missed pull is not a zero.`,
-    never: "Never fetched. Empty charts are a missing pull, not a zero.",
-  }[state];
-
-  return { state, message };
-}
-
-/**
- * The mechanism that makes a failed or delayed cron run visible. Compares the
- * last successful fetch against that source's own cadence, so "late" always
- * means the same thing as the schedule in supabase/migrations/0004_cron.sql.
+ * One chip per source. Red when the last run failed or the last success is
+ * past that source's cadence. The sentence names the last successful pull
+ * and never describes the gap as a zero.
  */
 export function FreshnessBadge({
   source,
@@ -107,9 +78,12 @@ export function FreshnessBadge({
   const { state, message } = describeFreshness(source, freshness);
   const cadence = SOURCE_CADENCE_DAYS[source];
 
+  // A null HTTP status is unknown and is not passed in here. Red is a failed
+  // or abandoned ingest, a failed cron run, a present non-2xx status (all
+  // folded into `failing`), or a source past its cadence (`stale`).
   const color = {
     fresh: "var(--nos-positive)",
-    failing: "var(--nos-signal-warm)",
+    failing: "var(--nos-negative)",
     stale: "var(--nos-negative)",
     never: "var(--nos-negative)",
   }[state];
@@ -126,6 +100,8 @@ export function FreshnessBadge({
         // canvas; a flat 6px dot disappears against the glass card.
         style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}` }}
       />
+      <span className="font-semibold text-white">{SOURCE_CHIP[source]}</span>
+      <span className="text-[var(--nos-text-muted)]">·</span>
       {message}
     </span>
   );

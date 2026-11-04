@@ -1,0 +1,157 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
+import {
+  abandonedRunAt,
+  deliveryFailureAt,
+  describeFreshness,
+  httpStatusIsFailure,
+  type DeliveryStatus,
+} from "./freshness";
+
+const hour = 60 * 60 * 1000;
+
+describe("describeFreshness", () => {
+  it("keeps a recent success fresh", () => {
+    const result = describeFreshness("ga4", {
+      lastSuccessAt: new Date().toISOString(),
+      lastErrorAt: null,
+    });
+    assert.equal(result.state, "fresh");
+  });
+
+  it("shows a newer failure the same day and does not call it a zero", () => {
+    const result = describeFreshness("ga4", {
+      lastSuccessAt: new Date(Date.now() - hour).toISOString(),
+      lastErrorAt: new Date().toISOString(),
+    });
+    assert.equal(result.state, "failing");
+    assert.match(result.message, /not a zero/);
+  });
+
+  it("marks GA4 overdue after its 3 day cadence and Clarity after 1 day", () => {
+    const fourDays = new Date(Date.now() - 4 * 24 * hour).toISOString();
+    const twoDays = new Date(Date.now() - 2 * 24 * hour).toISOString();
+    assert.equal(describeFreshness("ga4", { lastSuccessAt: fourDays, lastErrorAt: null }).state, "stale");
+    assert.equal(
+      describeFreshness("clarity", { lastSuccessAt: twoDays, lastErrorAt: null }).state,
+      "stale",
+    );
+    assert.match(
+      describeFreshness("calendly", { lastSuccessAt: fourDays, lastErrorAt: null }).message,
+      /not a zero/,
+    );
+  });
+
+  it("does not let an older failure override a later success", () => {
+    const result = describeFreshness("clarity", {
+      lastSuccessAt: new Date().toISOString(),
+      lastErrorAt: new Date(Date.now() - 24 * hour).toISOString(),
+    });
+    assert.equal(result.state, "fresh");
+  });
+});
+
+describe("delivery status and the chip", () => {
+  const recentSuccess = new Date(Date.now() - hour).toISOString();
+  const base: DeliveryStatus = {
+    source: "ga4",
+    cron_status: "succeeded",
+    cron_ended_at: "2026-11-04T06:00:00Z",
+    http_status: 200,
+    http_timed_out: false,
+    http_at: "2026-11-04T06:01:00Z",
+  };
+
+  it("treats a null http status as unknown", () => {
+    assert.equal(httpStatusIsFailure(null), false);
+    assert.equal(
+      deliveryFailureAt({
+        ...base,
+        http_status: null,
+        http_timed_out: true,
+        http_at: null,
+      }),
+      null,
+    );
+    assert.equal(
+      describeFreshness("ga4", { lastSuccessAt: recentSuccess, lastErrorAt: null }).state,
+      "fresh",
+    );
+    assert.notEqual(
+      describeFreshness("ga4", { lastSuccessAt: null, lastErrorAt: null }).state,
+      "fresh",
+    );
+  });
+
+  it("does not treat a 200 as a failure or as a success on its own", () => {
+    assert.equal(httpStatusIsFailure(200), false);
+    assert.equal(deliveryFailureAt(base), null);
+    assert.equal(
+      describeFreshness("ga4", { lastSuccessAt: recentSuccess, lastErrorAt: null }).state,
+      "fresh",
+    );
+    assert.notEqual(
+      describeFreshness("gsc", { lastSuccessAt: null, lastErrorAt: null }).state,
+      "fresh",
+    );
+  });
+
+  it("turns the chip red for a 401", () => {
+    const at = deliveryFailureAt({
+      ...base,
+      source: "gsc",
+      http_status: 401,
+      http_at: "2026-11-04T06:16:00Z",
+    });
+    assert.equal(at, "2026-11-04T06:16:00Z");
+    assert.equal(
+      describeFreshness("gsc", { lastSuccessAt: "2026-11-04T06:00:00Z", lastErrorAt: at }).state,
+      "failing",
+    );
+  });
+
+  it("turns the chip red for a failed cron run even when http status is null", () => {
+    const at = deliveryFailureAt({
+      ...base,
+      source: "clarity",
+      cron_status: "failed",
+      cron_ended_at: "2026-11-04T05:00:00Z",
+      http_status: null,
+      http_timed_out: null,
+      http_at: null,
+    });
+    assert.equal(at, "2026-11-04T05:00:00Z");
+    assert.equal(
+      describeFreshness("clarity", { lastSuccessAt: "2026-11-03T05:00:00Z", lastErrorAt: at }).state,
+      "failing",
+    );
+  });
+
+  it("turns the chip red when a source is stale beyond its cadence", () => {
+    const fourDays = new Date(Date.now() - 4 * 24 * hour).toISOString();
+    const result = describeFreshness("ga4", { lastSuccessAt: fourDays, lastErrorAt: null });
+    assert.equal(result.state, "stale");
+    assert.match(result.message, /not a zero/);
+    assert.equal(deliveryFailureAt({ ...base, http_status: null, http_at: null }), null);
+  });
+});
+
+describe("abandonedRunAt", () => {
+  it("waits out an in-flight run", () => {
+    const started = new Date(Date.now() - 60 * 1000).toISOString();
+    assert.equal(abandonedRunAt({ status: "running", started_at: started }), null);
+  });
+
+  it("counts a run still open past the HTTP timeout as a failed pull", () => {
+    const started = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    assert.equal(abandonedRunAt({ status: "running", started_at: started }), started);
+  });
+
+  it("ignores a finished success", () => {
+    assert.equal(
+      abandonedRunAt({ status: "success", started_at: new Date(Date.now() - 24 * hour).toISOString() }),
+      null,
+    );
+  });
+});

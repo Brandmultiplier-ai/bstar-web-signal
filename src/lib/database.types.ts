@@ -282,7 +282,19 @@ export type Database = {
     Views: {
       source_freshness: { Row: SourceFreshness; Relationships: [] };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      ingest_delivery_status: {
+        Args: Record<PropertyKey, never>;
+        Returns: Array<{
+          source: string;
+          cron_status: string | null;
+          cron_ended_at: string | null;
+          http_status: number | null;
+          http_timed_out: boolean | null;
+          http_at: string | null;
+        }>;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

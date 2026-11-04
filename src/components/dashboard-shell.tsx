@@ -377,7 +377,8 @@ function FreshnessCard({ site, range }: { site: SiteSummary; range: DateFilter }
             <span className="text-xs text-white/80">{row.label}</span>
             <span
               className="truncate text-xs font-semibold text-white"
-              style={row.state === "fresh" ? undefined : { color: "#ffd0d0" }}
+              title={row.message}
+              style={row.state === "fresh" ? undefined : { color: "#ff5c5c" }}
             >
               {stateWord(row.state)}
             </span>

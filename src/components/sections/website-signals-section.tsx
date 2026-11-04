@@ -41,6 +41,7 @@ export function WebsiteSignalsSection({
         {site.hasSearchConsole && (
           <FreshnessBadge source="gsc" freshness={data.freshness.gsc} />
         )}
+        <FreshnessBadge source="calendly" freshness={data.freshness.calendly} />
       </div>
 
       <DataNote>{SOURCE_WINDOW_NOTES.overview}</DataNote>

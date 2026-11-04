@@ -25,17 +25,21 @@ export type DeliveryStatus = {
 };
 
 /**
- * A cron or HTTP failure that never reached `ingestion_runs`. A 200 and a
- * still-running job are not failures: a real zero must stay a zero.
+ * A null HTTP status is unknown. pg_net drops responses after about six
+ * hours, so a missing status must not count as a failure and must not count
+ * as a success. Only a cron status of `failed`, or a status that is present
+ * and outside 2xx, is a delivery failure.
  */
+export function httpStatusIsFailure(status: number | null): boolean {
+  return typeof status === "number" && (status < 200 || status >= 300);
+}
+
 export function deliveryFailureAt(row: DeliveryStatus): string | null {
   const cronFailed = row.cron_status === "failed";
-  const httpFailed =
-    row.http_timed_out === true ||
-    (typeof row.http_status === "number" && row.http_status >= 400);
+  const httpFailed = httpStatusIsFailure(row.http_status);
   const stamps = [
     cronFailed ? row.cron_ended_at : null,
-    httpFailed ? row.http_at : null,
+    httpFailed ? (row.http_at ?? row.cron_ended_at) : null,
   ].filter((value): value is string => Boolean(value));
   if (stamps.length === 0) return null;
   return stamps.reduce((latest, stamp) => (new Date(stamp) > new Date(latest) ? stamp : latest));

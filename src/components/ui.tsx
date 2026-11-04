@@ -78,6 +78,9 @@ export function FreshnessBadge({
   const { state, message } = describeFreshness(source, freshness);
   const cadence = SOURCE_CADENCE_DAYS[source];
 
+  // A null HTTP status is unknown and is not passed in here. Red is a failed
+  // or abandoned ingest, a failed cron run, a present non-2xx status (all
+  // folded into `failing`), or a source past its cadence (`stale`).
   const color = {
     fresh: "var(--nos-positive)",
     failing: "var(--nos-negative)",

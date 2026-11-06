@@ -1,6 +1,6 @@
 import type { IngestSource } from "@/lib/database.types";
 import { daysSince, formatRelative } from "@/lib/dates";
-import { SOURCE_CADENCE_DAYS } from "@/lib/sources";
+import { SOURCE_CADENCE_DAYS, cadenceLabel } from "@/lib/sources";
 
 export type Freshness = {
   lastSuccessAt: string | null;
@@ -103,8 +103,8 @@ export function summarizeRuns(
 
 /**
  * A failed or skipped pull is never described as a zero. "Late" uses the same
- * cadence as the schedule: Clarity daily, GA4, Search Console and Calendly
- * every 3 days.
+ * cadence as the schedule: Clarity, GA4 and Search Console daily, Calendly
+ * every 12 hours.
  */
 export function describeFreshness(
   source: IngestSource,
@@ -123,7 +123,7 @@ export function describeFreshness(
   const message = {
     fresh: `Updated ${formatRelative(lastSuccess)}`,
     failing: `Last run failed. Numbers on screen are from ${formatRelative(lastSuccess)}, not a zero for the missing pull.`,
-    stale: `Overdue — last success ${formatRelative(lastSuccess)}, expected every ${cadence}d. A missed pull is not a zero.`,
+    stale: `Overdue — last success ${formatRelative(lastSuccess)}, expected ${cadenceLabel(source)}. A missed pull is not a zero.`,
     never: "No pull yet for this source. Empty charts are a missing pull, not a zero.",
   }[state];
 

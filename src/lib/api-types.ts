@@ -118,12 +118,18 @@ export type SummaryKpi = {
 export type Mover = { key: string; current: number; previous: number; difference: number };
 export type MoverSet = { risers: Mover[]; fallers: Mover[] };
 
+export type SummaryDay = { date: string; sessions: number | null; clicks: number | null };
+export type SummaryInsight = { tone: "good" | "bad" | "neutral"; text: string };
+
 export type SummaryResponse = {
   range: Range & { allTime?: boolean };
   /** Null for an all-time range, which has no earlier window to compare with. */
   previous: Range | null;
   kpis: SummaryKpi[];
   changed: { pages: MoverSet; queries: MoverSet; channels: MoverSet } | null;
+  /** One entry per day; `previous` is the same day offset in the earlier window. Null values mean no stored row. */
+  daily: Array<{ current: SummaryDay; previous: SummaryDay | null }>;
+  insights: SummaryInsight[];
   freshness: { ga4: Freshness; gsc: Freshness; clarity: Freshness; calendly: Freshness; rb2b: Freshness };
 };
 

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 
 import type { IngestSource } from "@/lib/database.types";
 import { clarityStatusText, describeFreshness, SOURCE_CHIP, type Freshness } from "@/lib/freshness";
-import { SOURCE_CADENCE_DAYS, SOURCE_LABELS } from "@/lib/sources";
+import { SOURCE_LABELS, cadenceLabel } from "@/lib/sources";
 import { CardInfoButton } from "@/website-signals-kit/components/CardInfoButton";
 
 export type { Freshness, FreshnessState } from "@/lib/freshness";
@@ -113,8 +113,6 @@ export function FreshnessBadge({
   source: IngestSource;
   freshness?: Freshness;
 }) {
-  const cadence = SOURCE_CADENCE_DAYS[source];
-
   // No answer yet is not the same as "never pulled". Stay neutral until the
   // API has said what the last pull was.
   if (!freshness) {
@@ -147,7 +145,7 @@ export function FreshnessBadge({
   return (
     <span
       className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-white/5 px-3 py-1.5 text-[11px] font-medium text-[var(--nos-text-secondary)]"
-      title={`${SOURCE_LABELS[source]} · fetched every ${cadence} days`}
+      title={`${SOURCE_LABELS[source]} · fetched ${cadenceLabel(source)}`}
     >
       <span
         aria-hidden

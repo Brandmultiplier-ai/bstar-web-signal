@@ -86,10 +86,17 @@ describe("describeFreshness", () => {
     assert.match(result.message, /not a zero/);
   });
 
-  it("marks GA4 overdue after its 3 day cadence and Clarity after 1 day", () => {
+  it("marks GA4 and Clarity overdue after 1 day and Calendly after 12 hours", () => {
     const fourDays = new Date(Date.now() - 4 * 24 * hour).toISOString();
     const twoDays = new Date(Date.now() - 2 * 24 * hour).toISOString();
-    assert.equal(describeFreshness("ga4", { lastSuccessAt: fourDays, lastErrorAt: null }).state, "stale");
+    const halfDay = new Date(Date.now() - 13 * hour).toISOString();
+    assert.equal(describeFreshness("ga4", { lastSuccessAt: twoDays, lastErrorAt: null }).state, "stale");
+    assert.equal(describeFreshness("ga4", { lastSuccessAt: halfDay, lastErrorAt: null }).state, "fresh");
+    assert.equal(describeFreshness("calendly", { lastSuccessAt: halfDay, lastErrorAt: null }).state, "stale");
+    assert.match(
+      describeFreshness("calendly", { lastSuccessAt: halfDay, lastErrorAt: null }).message,
+      /expected every 12 hours/,
+    );
     assert.equal(
       describeFreshness("clarity", { lastSuccessAt: twoDays, lastErrorAt: null }).state,
       "stale",

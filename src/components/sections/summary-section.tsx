@@ -2,6 +2,7 @@
 
 import { ArrowRight, TrendingDown, TrendingUp } from "lucide-react";
 
+import { InsightsCard, SummaryTrend } from "@/components/summary-trend";
 import { useSummary } from "@/lib/hooks";
 import {
   DeltaChip,
@@ -55,7 +56,7 @@ export function SummarySection({
             <FreshnessBadge source="calendly" freshness={data.freshness.calendly} />
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {data.kpis.map((kpi) => (
               <KpiTile
                 key={kpi.id}
@@ -64,6 +65,13 @@ export function SummarySection({
                 onHover={onHover ? () => onHover(kpi.section) : undefined}
               />
             ))}
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <SummaryTrend data={data} />
+            </div>
+            <InsightsCard insights={data.insights} />
           </div>
 
           <div>
@@ -116,6 +124,7 @@ function KpiTile({
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           onOpen();
@@ -163,6 +172,9 @@ const KPI_INFO: Record<string, string> = {
   sessions: "Visits to the site from Google Analytics.",
   users: "Distinct people who visited, from Google Analytics.",
   clicks: "Clicks from Google Search results, from Search Console.",
+  impressions: "How many times the site appeared in Google Search results.",
+  ctr: "Share of Google Search impressions that became a click.",
+  bookingRate: "Primary sales calls booked per 100 website visits in the range.",
   position: "Average Google ranking, weighted by impressions. Lower is better.",
   rage: "Share of Clarity sessions with rage clicks. Lower is better.",
   dead: "Share of Clarity sessions with clicks on things that do nothing. Lower is better.",

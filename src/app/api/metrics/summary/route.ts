@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 
 import { inCountedRange, isHeadline } from "@/lib/calendly-taxonomy";
 import { readClassifiedBookings } from "@/lib/read/calendly";
+import { addDays, inclusiveDays, toDateString } from "@/lib/dates";
 import { delta, inWindow, movers, previousWindow, sumBy, type Window } from "@/lib/read/compare";
+import { buildInsights } from "@/lib/read/insights";
 import { readCompanyVisits, readFormCaptures } from "@/lib/read/leads";
 import { parseRange, readAllFreshness, requireReader, requireSiteId } from "@/lib/read/request";
 import { readJson, startTimer } from "@/lib/read/respond";
@@ -132,6 +134,7 @@ export async function GET(request: Request) {
     }
     return w > 0 ? s / w : null;
   };
+  const ratePct = (part: number, whole: number) => (whole > 0 ? (part / whole) * 100 : null);
 
   const ga4 = split(ga4Daily.data);
   const gsc = split(gscDaily.data);
@@ -195,6 +198,22 @@ export async function GET(request: Request) {
       weighted(gsc.before, (row) => row.avg_position, (row) => row.impressions),
     ),
     numberKpi(
+      { id: "impressions", label: "Google search impressions", section: "gsc", format: "number", goodWhen: "up" },
+      gscDaily,
+      hasGsc,
+      Boolean(freshness.gsc.lastSuccessAt),
+      gsc.now.length ? total(gsc.now, (row) => row.impressions) : null,
+      gsc.before.length ? total(gsc.before, (row) => row.impressions) : null,
+    ),
+    numberKpi(
+      { id: "ctr", label: "Search click-through rate", section: "gsc", format: "percent", goodWhen: "up" },
+      gscDaily,
+      hasGsc,
+      Boolean(freshness.gsc.lastSuccessAt),
+      ratePct(total(gsc.now, (row) => row.clicks), total(gsc.now, (row) => row.impressions)),
+      ratePct(total(gsc.before, (row) => row.clicks), total(gsc.before, (row) => row.impressions)),
+    ),
+    numberKpi(
       { id: "rage", label: "Rage-click rate", section: "clarity", format: "percent", goodWhen: "down" },
       clarityDaily,
       hasClarity,
@@ -217,6 +236,14 @@ export async function GET(request: Request) {
       Boolean(freshness.calendly.lastSuccessAt),
       countIn(current),
       previous ? countIn(previous) : null,
+    ),
+    numberKpi(
+      { id: "bookingRate", label: "Visit to booking rate", section: "calendly", format: "percent", goodWhen: "up" },
+      ga4Daily.error ? ga4Daily : bookings.error ? { error: { message: bookings.error } } : null,
+      hasGa4 && bookingsMapToSite,
+      Boolean(freshness.ga4.lastSuccessAt && freshness.calendly.lastSuccessAt),
+      ga4.now.length ? ratePct(countIn(current), total(ga4.now, (row) => row.sessions)) : null,
+      previous && ga4.before.length ? ratePct(countIn(previous), total(ga4.before, (row) => row.sessions)) : null,
     ),
     numberKpi(
       { id: "companies", label: "Companies identified", section: "leads", format: "number", goodWhen: "up" },
@@ -266,12 +293,17 @@ export async function GET(request: Request) {
       }
     : null;
 
+  const daily = dailySeries(current, previous, ga4Daily.data ?? [], gscDaily.data ?? []);
+  const insights = buildInsights({ kpis, changed, daily: daily.map((point) => point.current) });
+
   return readJson(
     {
       range,
       previous,
       kpis,
       changed,
+      daily,
+      insights,
       freshness: {
         ga4: freshness.ga4,
         gsc: freshness.gsc,
@@ -283,3 +315,36 @@ export async function GET(request: Request) {
     timer,
   );
 }
+
+type DayRow = { date: string };
+
+/**
+ * One point per day of the range, paired with the same day offset in the
+ * previous window. A day with no stored row is null, never zero.
+ */
+function dailySeries(
+  current: Window,
+  previous: Window | null,
+  ga4Rows: Array<DayRow & { sessions: number }>,
+  gscRows: Array<DayRow & { clicks: number }>,
+) {
+  const sessions = sumBy(ga4Rows, (row) => row.date.slice(0, 10), (row) => row.sessions);
+  const clicks = sumBy(gscRows, (row) => row.date.slice(0, 10), (row) => row.clicks);
+  const stored = [...sessions.keys(), ...clicks.keys()].filter((date) => inWindow(date, current)).sort();
+  const first = previous ? current.start : (stored[0] ?? current.start);
+  const days = Math.min(inclusiveDays(first, current.end), MAX_DAILY_POINTS);
+  const start = new Date(`${current.end}T00:00:00Z`);
+  const point = (date: string) => ({
+    date,
+    sessions: sessions.get(date) ?? null,
+    clicks: clicks.get(date) ?? null,
+  });
+
+  return Array.from({ length: days }, (_, i) => {
+    const date = toDateString(addDays(start, i - days + 1));
+    const earlier = previous ? toDateString(addDays(new Date(`${previous.end}T00:00:00Z`), i - days + 1)) : null;
+    return { current: point(date), previous: earlier ? point(earlier) : null };
+  });
+}
+
+const MAX_DAILY_POINTS = 366;

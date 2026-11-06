@@ -3,7 +3,15 @@ import type { protos } from "@google-analytics/data";
 import { createGa4Client } from "@/lib/clients/google";
 import { fromCompactDate } from "@/lib/dates";
 import {
+  countsKeyEvent,
+  dimensionIndex,
+  firstKeyEventAttempt,
+  keyEventRetryPlan,
+  type KeyEventAttempt,
+} from "@/lib/ingest/ga4-key-events";
+import {
   GA4_EVENT_NAME_TO_KEY,
+  GA4_FORM_ID_DIMENSION,
   GA4_KEY_EVENTS,
   GA4_PLACEMENT_DIMENSION,
 } from "@/lib/sources";
@@ -426,9 +434,39 @@ async function ingestSources(ctx: IngestContext, group: PropertyGroup): Promise<
 }
 
 /**
+ * Asks GA4 for key events with form_id and placement. An unregistered custom
+ * dimension rejects the whole report, so the next attempt drops only that
+ * dimension. Daily totals and the other key events still persist.
+ */
+async function loadKeyEventReport(
+  request: Omit<protos.google.analytics.data.v1beta.IRunReportRequest, "dimensions">,
+): Promise<{ rows: Row[]; attempt: KeyEventAttempt }> {
+  const first = firstKeyEventAttempt();
+  try {
+    return { rows: await runReport({ ...request, dimensions: named(first) }), attempt: first };
+  } catch (error) {
+    let last = error;
+    for (const attempt of keyEventRetryPlan(error)) {
+      try {
+        return { rows: await runReport({ ...request, dimensions: named(attempt) }), attempt };
+      } catch (next) {
+        last = next;
+      }
+    }
+    throw last;
+  }
+}
+
+function named(attempt: KeyEventAttempt): Array<{ name: string }> {
+  return attempt.dimensions.map((name) => ({ name }));
+}
+
+/**
  * The five named key events, with the page path and placement they fired from.
  * Filtered to our event names server-side so we do not pull the full event
- * catalogue for a long tail we never display.
+ * catalogue for a long tail we never display. When the report includes
+ * customEvent:form_id, form_submit rows with an empty or "(not set)" value
+ * are dropped. Other events are unchanged.
  */
 async function ingestKeyEvents(
   ctx: IngestContext,
@@ -446,29 +484,11 @@ async function ingestKeyEvents(
       },
     },
   };
-  const coreDimensions = [
-    { name: "date" },
-    { name: "hostName" },
-    { name: "eventName" },
-    { name: "pagePath" },
-  ];
-
-  let rows: Row[];
-  let hasPlacement = true;
-  try {
-    rows = await runReport({
-      ...request,
-      dimensions: [...coreDimensions, { name: GA4_PLACEMENT_DIMENSION }],
-    });
-  } catch {
-    // A property that never registered `customEvent:placement` rejects the
-    // whole report. Fall back so the named events still persist.
-    rows = await runReport({ ...request, dimensions: coreDimensions });
-    hasPlacement = false;
-  }
+  const loaded = await loadKeyEventReport(request);
+  const formIdAt = dimensionIndex(loaded.attempt, GA4_FORM_ID_DIMENSION);
 
   const mapped: Ga4KeyEventDaily[] = [];
-  for (const row of rows) {
+  for (const row of loaded.rows) {
     const siteId = resolveSiteId(group, row.dimensionValues?.[1]?.value);
     if (!siteId) continue;
 
@@ -477,12 +497,16 @@ async function ingestKeyEvents(
     // back to one of our five keys; the table's check constraint would reject.
     if (!eventKey) continue;
 
+    const formId = formIdAt === null ? null : dimension(row, formIdAt);
+    if (!countsKeyEvent(eventKey, formId, loaded.attempt.formIdKnown)) continue;
+
+    const placementAt = dimensionIndex(loaded.attempt, GA4_PLACEMENT_DIMENSION);
     mapped.push({
       site_id: siteId,
       date: fromCompactDate(dimension(row, 0)),
       event_key: eventKey,
       page_path: dimension(row, 3),
-      placement: hasPlacement ? dimension(row, 4) : UNSET,
+      placement: placementAt === null ? UNSET : dimension(row, placementAt),
       count: metric(row, 0),
     });
   }

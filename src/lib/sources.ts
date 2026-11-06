@@ -88,3 +88,12 @@ export const GA4_EVENT_NAME_TO_KEY: Record<string, Ga4EventKey> = Object.fromEnt
  * returns "(not set)" for every row rather than erroring.
  */
 export const GA4_PLACEMENT_DIMENSION = "customEvent:placement";
+
+/**
+ * Event-scoped custom dimension for the form that fired `form_submit`.
+ * GA4's Data API name is `customEvent:` plus the parameter name. The pull
+ * must request this dimension to drop rows where it is empty: a filter on a
+ * field that is not in the response would also hide every other key event
+ * that does not send form_id.
+ */
+export const GA4_FORM_ID_DIMENSION = "customEvent:form_id";

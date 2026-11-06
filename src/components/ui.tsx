@@ -18,11 +18,14 @@ export function Panel({
   freshness,
   icon: Icon,
   refreshing = false,
+  info,
   children,
 }: {
   title: string;
+  /** Subtitle, note and info all live behind the card's eye button. */
   subtitle?: string;
   note?: string;
+  info?: string;
   source?: IngestSource;
   freshness?: Freshness;
   icon?: React.ComponentType<{ size?: number; strokeWidth?: number }>;
@@ -30,35 +33,60 @@ export function Panel({
   refreshing?: boolean;
   children: React.ReactNode;
 }) {
+  const details = [subtitle, note, info].filter(Boolean) as string[];
   return (
     <section className="nos-card relative overflow-hidden" aria-busy={refreshing}>
       {refreshing && <RefreshBar />}
-      <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
+      <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
           {Icon && (
             <span
               className="vui-tile"
-              style={{ background: "var(--vui-gradient-brand)", width: 42, height: 42 }}
+              style={{ background: "var(--vui-gradient-brand)", width: 38, height: 38 }}
             >
-              <Icon size={18} strokeWidth={2} />
+              <Icon size={17} strokeWidth={2} />
             </span>
           )}
-          <div>
-            <h2 className="text-base font-bold text-white">{title}</h2>
-            {subtitle && (
-              <p className="mt-0.5 text-xs leading-relaxed text-[var(--nos-text-secondary)]">
-                {subtitle}
-              </p>
-            )}
-          </div>
+          <h2 className="text-base font-bold text-white">{title}</h2>
+          {details.length > 0 && <InfoEye text={details} />}
         </div>
         {source && <FreshnessBadge source={source} freshness={freshness} />}
       </header>
-      {note && <DataNote>{note}</DataNote>}
       <div className={refreshing ? "opacity-60 transition-opacity" : "transition-opacity"}>
         {children}
       </div>
     </section>
+  );
+}
+
+/** The one explanation button every card carries. */
+export function InfoEye({ text }: { text: string | string[] }) {
+  const parts = (Array.isArray(text) ? text : [text]).filter(Boolean);
+  if (parts.length === 0) return null;
+  return (
+    <CardInfoButton
+      description={
+        parts.length === 1 ? (
+          parts[0]
+        ) : (
+          <div className="space-y-2">
+            {parts.map((part) => (
+              <p key={part}>{part}</p>
+            ))}
+          </div>
+        )
+      }
+    />
+  );
+}
+
+/** A titled block inside a panel. Any explanation sits behind the eye. */
+export function SubHeading({ title, info }: { title: string; info?: string | string[] }) {
+  return (
+    <h3 className="mb-3 flex items-center gap-1.5 text-sm font-bold text-white">
+      {title}
+      {info && <InfoEye text={info} />}
+    </h3>
   );
 }
 
@@ -70,15 +98,6 @@ export function RefreshBar() {
       className="absolute inset-x-0 top-0 h-0.5 animate-pulse"
       style={{ background: "var(--vui-gradient-brand)" }}
     />
-  );
-}
-
-/** Always-visible window caveat so date chips are not mistaken for live API calls. */
-export function DataNote({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mb-5 rounded-xl border border-[var(--border)] bg-white/5 px-3.5 py-2.5 text-xs leading-relaxed text-[var(--nos-text-secondary)]">
-      {children}
-    </p>
   );
 }
 
@@ -144,6 +163,25 @@ export function FreshnessBadge({
   );
 }
 
+/** Plain definitions for the tiles that do not bring their own. */
+const STAT_GLOSSARY: Record<string, string> = {
+  Sessions: "Visits to the site. One person can make several sessions.",
+  Users: "Distinct people (browsers) who visited in this range.",
+  "Unique users": "Distinct people Clarity saw in this range.",
+  "New users": "People visiting for the first time in this range.",
+  Pageviews: "Every page load, including repeat views of the same page.",
+  Engagement: "Share of sessions that lasted 10+ seconds, viewed 2+ pages, or converted.",
+  Bounce: "Share of sessions that were not engaged.",
+  "Avg. duration": "Average length of a session.",
+  Clicks: "Clicks from Google Search results to the site.",
+  Impressions: "Times the site appeared in Google Search results.",
+  CTR: "Clicks divided by impressions.",
+  Companies: "Distinct companies RB2B identified among visitors.",
+  "Identified visits": "Visits RB2B matched to a person or company.",
+  Submissions: "Form submissions received from the site.",
+  "Forms used": "Distinct forms that received at least one submission.",
+};
+
 export function StatGrid({ children }: { children: React.ReactNode }) {
   // Same gap as the page-level bento so stat tiles sit on the shared rhythm.
   return <div className="grid grid-cols-2 items-stretch gap-4 sm:grid-cols-4">{children}</div>;
@@ -163,15 +201,15 @@ export function Stat({
   tip?: string;
   icon?: React.ComponentType<{ size?: number; strokeWidth?: number }>;
 }) {
+  const details = [tip ?? STAT_GLOSSARY[label] ?? label, hint].filter(Boolean) as string[];
   return (
     <div className="flex h-full items-start justify-between gap-2 rounded-2xl border border-[var(--border)] bg-white/[0.04] px-4 py-3">
       <div className="min-w-0">
         <p className="flex items-center gap-1.5 text-label-caps">
           <span className="whitespace-normal leading-snug">{label}</span>
-          {tip && <CardInfoButton description={tip} />}
+          <InfoEye text={details} />
         </p>
         <p className="mt-1 text-xl font-bold tabular-nums text-white">{value}</p>
-        {hint && <p className="mt-0.5 text-[11px] leading-snug text-[var(--nos-text-muted)]">{hint}</p>}
       </div>
       {Icon && (
         <span
@@ -305,16 +343,18 @@ export function RankList({
   rows,
   empty = "Nothing in this range.",
   format = formatNumber,
+  info,
 }: {
   title: string;
   rows: Array<{ name: string; value: number }>;
   empty?: string;
   format?: (value: number) => string;
+  info?: string;
 }) {
   const max = Math.max(1, ...rows.map((row) => row.value));
   return (
     <div>
-      <h3 className="mb-3 text-xs font-medium text-[var(--nos-text-muted)]">{title}</h3>
+      <SubHeading title={title} info={info ?? title} />
       {rows.length === 0 ? (
         <p className="text-sm text-[var(--nos-text-muted)]">{empty}</p>
       ) : (
@@ -350,7 +390,7 @@ export function DeltaChip({
   goodWhen?: "up" | "down";
 }) {
   if (change === null || !Number.isFinite(change)) {
-    return <span className="text-[11px] text-[var(--nos-text-muted)]">No earlier period to compare</span>;
+    return <span className="text-[11px] text-[var(--nos-text-muted)]">No comparison</span>;
   }
   const flat = Math.abs(change) < 0.005;
   const better = flat ? null : (change > 0) === (goodWhen === "up");
@@ -360,7 +400,7 @@ export function DeltaChip({
   return (
     <span className="text-[11px] font-semibold tabular-nums" style={{ color }}>
       {arrow} {flat ? "Flat" : `${Math.abs(change * 100).toFixed(change !== 0 && Math.abs(change) < 0.1 ? 1 : 0)}%`}
-      <span className="font-normal text-[var(--nos-text-muted)]"> vs previous period</span>
+      <span className="font-normal text-[var(--nos-text-muted)]"> vs before</span>
     </span>
   );
 }
@@ -410,41 +450,6 @@ export function PanelSkeleton({ tiles = 8, table = true }: { tiles?: number; tab
             <Block key={index} className="h-9" />
           ))}
         </div>
-      )}
-    </div>
-  );
-}
-
-export function InsightCard({
-  title,
-  body,
-  insight,
-}: {
-  title: string;
-  body: string;
-  insight?: string;
-}) {
-  return (
-    <div
-      className="rounded-2xl p-4"
-      style={{
-        background: "var(--vui-gradient-card)",
-        border: "1px solid var(--nos-accent-border)",
-      }}
-    >
-      <p
-        className="text-label-caps mb-2"
-        style={{
-          background: "linear-gradient(90deg, var(--nos-accent) 0%, var(--nos-accent-2) 100%)",
-          WebkitBackgroundClip: "text",
-          WebkitTextFillColor: "transparent",
-        }}
-      >
-        {title}
-      </p>
-      <p className="text-sm leading-relaxed text-[var(--nos-text-secondary)]">{body}</p>
-      {insight && (
-        <p className="mt-2 text-sm leading-relaxed text-white">{insight}</p>
       )}
     </div>
   );

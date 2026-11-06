@@ -4,14 +4,13 @@ import { Building2 } from "lucide-react";
 
 import { useLeads } from "@/lib/hooks";
 import {
-  DataNote,
-  InsightCard,
   Panel,
   QueryState,
   RankList,
   SimpleTable,
   Stat,
   StatGrid,
+  SubHeading,
   formatNumber,
 } from "@/components/ui";
 import { HistogramBar } from "@/website-signals-kit/components/charts/HistogramBar";
@@ -26,17 +25,18 @@ export function LeadsSection({ site, range }: { site: SiteSummary; range: DateFi
       refreshing={Boolean(data) && isFetching}
       title="Leads"
       subtitle={`Companies RB2B identified on ${site.domain}, and anonymous form submissions. No visitor names or emails are stored or shown.`}
+      info={[
+        "RB2B names the company behind some visits. Form submissions come from the site's own capture webhook. Both arrive in real time, so there is no scheduled pull.",
+        data ? leadLine(data) : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       icon={Building2}
     >
       {!data ? (
         <QueryState isLoading={isLoading} error={error} />
       ) : (
         <div className="space-y-8">
-          <InsightCard
-            title="What this report is"
-            body="RB2B names the company behind some visits. Form submissions come from the site's own capture webhook. Both arrive in real time, so there is no scheduled pull."
-            insight={leadLine(data)}
-          />
           <Companies companies={data.companies} />
           <Forms forms={data.forms} />
         </div>
@@ -61,8 +61,8 @@ function leadLine(data: LeadsResponse): string {
 function Unavailable({ title, reason }: { title: string; reason: string }) {
   return (
     <div>
-      <h3 className="mb-2 text-sm font-bold text-white">{title}</h3>
-      <DataNote>{reason} This is not a zero.</DataNote>
+      <SubHeading title={title} info={`${reason} This is not a zero.`} />
+      <p className="text-sm text-[var(--nos-text-muted)]">Not available yet.</p>
     </div>
   );
 }
@@ -71,7 +71,10 @@ function Companies({ companies }: { companies: LeadsResponse["companies"] }) {
   if (!companies.available) return <Unavailable title="Companies" reason={companies.reason} />;
   return (
     <div className="space-y-5">
-      <h3 className="text-sm font-bold text-white">Companies</h3>
+      <SubHeading
+        title="Companies"
+        info="Companies RB2B identified among visitors. Click a column header to sort. Roles are job titles only, never names."
+      />
       <StatGrid>
         <Stat label="Companies" value={formatNumber(companies.totals.companies)} />
         <Stat label="Identified visits" value={formatNumber(companies.totals.visits)} />
@@ -124,7 +127,10 @@ function Forms({ forms }: { forms: LeadsResponse["forms"] }) {
   if (!forms.available) return <Unavailable title="Form submissions" reason={forms.reason} />;
   return (
     <div className="space-y-5">
-      <h3 className="text-sm font-bold text-white">Form submissions</h3>
+      <SubHeading
+        title="Form submissions"
+        info="Anonymous submissions from the site's forms. Only the form, page and UTM tags are stored."
+      />
       <StatGrid>
         <Stat label="Submissions" value={formatNumber(forms.totals.submissions)} />
         <Stat label="Forms used" value={formatNumber(forms.byForm.length)} />

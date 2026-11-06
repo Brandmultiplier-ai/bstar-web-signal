@@ -6,8 +6,9 @@ import { useSummary } from "@/lib/hooks";
 import {
   DeltaChip,
   FreshnessBadge,
-  InsightCard,
+  InfoEye,
   Panel,
+  SubHeading,
   QueryState,
   formatNumber,
   formatRate,
@@ -41,6 +42,7 @@ export function SummarySection({
       refreshing={Boolean(data) && isFetching}
       title="Business summary"
       subtitle={`How ${site.domain} did in this range, against the same number of days just before it. Click any figure to open its report.`}
+      info={data ? `${periodLine(data)} ${headline(data.kpis)}` : undefined}
     >
       {!data ? (
         <QueryState isLoading={isLoading} error={error} />
@@ -52,8 +54,6 @@ export function SummarySection({
             {site.hasClarity && <FreshnessBadge source="clarity" freshness={data.freshness.clarity} />}
             <FreshnessBadge source="calendly" freshness={data.freshness.calendly} />
           </div>
-
-          <InsightCard title="In one line" body={periodLine(data)} insight={headline(data.kpis)} />
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {data.kpis.map((kpi) => (
@@ -67,10 +67,10 @@ export function SummarySection({
           </div>
 
           <div>
-            <h3 className="mb-1 text-sm font-bold text-white">What changed</h3>
-            <p className="mb-4 text-xs text-[var(--nos-text-secondary)]">
-              The biggest moves against the previous period, from stored data.
-            </p>
+            <SubHeading
+              title="What changed"
+              info="The biggest moves against the previous period of the same length, from stored data."
+            />
             {data.changed ? (
               <div className="grid gap-4 lg:grid-cols-3">
                 <MoverCard
@@ -91,7 +91,7 @@ export function SummarySection({
               </div>
             ) : (
               <p className="text-sm text-[var(--nos-text-muted)]">
-                All time has no earlier period to compare with. Pick 7, 28 or 90 days to see movers.
+                All time has no earlier period to compare with. Pick a date range to see movers.
               </p>
             )}
           </div>
@@ -111,15 +111,34 @@ function KpiTile({
   onHover?: () => void;
 }) {
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
       onMouseEnter={onHover}
       onFocus={onHover}
-      className="group flex h-full flex-col justify-between gap-2 rounded-2xl border border-[var(--border)] bg-white/[0.04] px-4 py-3 text-left transition-colors hover:border-[var(--nos-accent-border)] hover:bg-white/[0.07]"
+      className="group flex h-full cursor-pointer flex-col justify-between gap-2 rounded-2xl border border-[var(--border)] bg-white/[0.04] px-4 py-3 text-left transition-colors hover:border-[var(--nos-accent-border)] hover:bg-white/[0.07]"
     >
       <span className="flex items-center justify-between gap-2">
-        <span className="text-label-caps">{kpi.label}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="text-label-caps">{kpi.label}</span>
+          <InfoEye
+            text={[
+              KPI_INFO[kpi.id] ?? kpi.label,
+              kpi.available
+                ? kpi.previous !== null
+                  ? `Previous period: ${formatKpi(kpi, kpi.previous)}.`
+                  : "No earlier period to compare with."
+                : kpi.reason,
+            ]}
+          />
+        </span>
         <span className="flex items-center gap-1 text-[10px] text-[var(--nos-text-muted)] group-hover:text-white">
           {SECTION_LABELS[kpi.section]}
           <ArrowRight size={11} />
@@ -128,31 +147,39 @@ function KpiTile({
       {kpi.available ? (
         <>
           <span className="text-2xl font-bold tabular-nums text-white">{formatKpi(kpi, kpi.current)}</span>
-          <span className="flex flex-wrap items-baseline gap-x-2">
-            <DeltaChip change={kpi.change} goodWhen={kpi.goodWhen} />
-            {kpi.previous !== null && (
-              <span className="text-[11px] text-[var(--nos-text-muted)]">
-                was {formatKpi(kpi, kpi.previous)}
-              </span>
-            )}
-          </span>
+          <DeltaChip change={kpi.change} goodWhen={kpi.goodWhen} />
         </>
       ) : (
         <>
           <span className="text-2xl font-bold text-[var(--nos-text-muted)]">—</span>
-          <span className="text-[11px] leading-snug text-[var(--nos-text-muted)]">{kpi.reason}</span>
+          <span className="text-[11px] text-[var(--nos-text-muted)]">Not available</span>
         </>
       )}
-    </button>
+    </div>
   );
 }
+
+const KPI_INFO: Record<string, string> = {
+  sessions: "Visits to the site from Google Analytics.",
+  users: "Distinct people who visited, from Google Analytics.",
+  clicks: "Clicks from Google Search results, from Search Console.",
+  position: "Average Google ranking, weighted by impressions. Lower is better.",
+  rage: "Share of Clarity sessions with rage clicks. Lower is better.",
+  dead: "Share of Clarity sessions with clicks on things that do nothing. Lower is better.",
+  bookings: "Primary sales calls booked through Calendly for this site.",
+  companies: "Distinct companies RB2B identified among visitors.",
+  forms: "Form submissions received from this site.",
+};
 
 function MoverCard({ title, set, onOpen }: { title: string; set: MoverSet; onOpen: () => void }) {
   const empty = set.risers.length === 0 && set.fallers.length === 0;
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-white/[0.03] p-4">
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-label-caps">{title}</p>
+        <p className="flex items-center gap-1.5">
+          <span className="text-label-caps">{title}</span>
+          <InfoEye text={`Biggest risers and fallers in ${title.toLowerCase()} against the previous period.`} />
+        </p>
         <button
           type="button"
           onClick={onOpen}

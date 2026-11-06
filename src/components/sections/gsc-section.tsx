@@ -5,11 +5,11 @@ import { Search } from "lucide-react";
 
 import { useGsc } from "@/lib/hooks";
 import {
-  InsightCard,
   Panel,
   QueryState,
   RankList,
   SimpleTable,
+  SubHeading,
   Stat,
   StatGrid,
   formatNumber,
@@ -18,6 +18,7 @@ import {
 import { HistogramBar } from "@/website-signals-kit/components/charts/HistogramBar";
 import { TrendLine } from "@/website-signals-kit/components/charts/TrendLine";
 import type { SiteSummary } from "@/lib/api-types";
+import { formatLongDate } from "@/lib/dates";
 import type { DateFilter } from "@/store/dashboard-store";
 import { REPORT_BLURBS, SOURCE_WINDOW_NOTES } from "@/lib/summaries";
 
@@ -35,6 +36,7 @@ export function GscSection({ site, range }: { site: SiteSummary; range: DateFilt
       title="Search Console"
       subtitle={`Organic search for ${site.domain}. Date changes re-read stored days — they never call Google.`}
       note={SOURCE_WINDOW_NOTES.gsc}
+      info={REPORT_BLURBS.gsc}
       source="gsc"
       freshness={data?.freshness}
       icon={Search}
@@ -43,16 +45,6 @@ export function GscSection({ site, range }: { site: SiteSummary; range: DateFilt
         <QueryState isLoading={isLoading} error={error} />
       ) : (
         <div className="space-y-6">
-          <InsightCard
-            title="What this report is"
-            body={REPORT_BLURBS.gsc}
-            insight={
-              empty
-                ? "Nothing stored yet. Search Console API is not writing rows for this property."
-                : `${formatNumber(data.totals.clicks)} clicks from ${formatNumber(data.totals.impressions)} impressions.`
-            }
-          />
-
           {empty && <GscSetupCard site={site} />}
 
           {!empty && (
@@ -64,7 +56,7 @@ export function GscSection({ site, range }: { site: SiteSummary; range: DateFilt
                 <Stat
                   label="Avg position"
                   value={data.totals.avgPosition.toFixed(1)}
-                  hint="Impression-weighted"
+                  tip="Average Google ranking across all queries, weighted by impressions. Lower is better."
                 />
               </StatGrid>
 
@@ -100,16 +92,16 @@ export function GscSection({ site, range }: { site: SiteSummary; range: DateFilt
                 <Stat
                   label="Indexed pages"
                   value={data.indexStatus ? formatNumber(data.indexStatus.indexed) : "—"}
-                  hint={
+                  tip={
                     data.indexStatus
-                      ? `As of ${data.indexStatus.observedOn}`
-                      : "No coverage snapshot stored"
+                      ? `Pages Google has indexed, as of ${formatLongDate(data.indexStatus.observedOn)}.`
+                      : "No coverage snapshot stored yet."
                   }
                 />
                 <Stat
                   label="Not indexed"
                   value={data.indexStatus ? formatNumber(data.indexStatus.notIndexed) : "—"}
-                  hint="Submitted but not indexed"
+                  tip="Pages submitted to Google that are not indexed."
                 />
               </StatGrid>
 
@@ -146,14 +138,15 @@ export function GscSection({ site, range }: { site: SiteSummary; range: DateFilt
               </div>
 
               <div>
-                <h3 className="mb-2 text-xs font-medium text-[var(--nos-text-muted)]">
-                  Queries, click-earning first
-                </h3>
-                <p className="mb-2 text-[11px] leading-relaxed text-[var(--nos-text-muted)]">
-                  {data.queryCoverage.clicksInTable === data.queryCoverage.clicksTotal
-                    ? `These queries account for all ${formatNumber(data.queryCoverage.clicksTotal)} clicks in this range.`
-                    : `These stored queries account for ${formatNumber(data.queryCoverage.clicksInTable)} of ${formatNumber(data.queryCoverage.clicksTotal)} clicks. The daily total includes queries that were not kept. This list is not a full breakdown.`}
-                </p>
+                <SubHeading
+                  title="Search queries"
+                  info={[
+                    data.queryCoverage.clicksInTable === data.queryCoverage.clicksTotal
+                      ? `These queries account for all ${formatNumber(data.queryCoverage.clicksTotal)} clicks in this range.`
+                      : `These stored queries account for ${formatNumber(data.queryCoverage.clicksInTable)} of ${formatNumber(data.queryCoverage.clicksTotal)} clicks. The daily total includes queries that were not kept.`,
+                    "Click a column header to sort. Click a query to see it day by day.",
+                  ]}
+                />
                 <SimpleTable
                   rows={data.topQueries}
                   empty="No queries stored in this range."
@@ -187,9 +180,6 @@ export function GscSection({ site, range }: { site: SiteSummary; range: DateFilt
                     },
                   ]}
                 />
-                <p className="mt-2 text-[11px] text-[var(--nos-text-muted)]">
-                  Click a query to see its clicks and impressions day by day.
-                </p>
               </div>
 
               {queryDetail && (

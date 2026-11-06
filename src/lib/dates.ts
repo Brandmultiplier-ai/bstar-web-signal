@@ -62,6 +62,34 @@ export function formatRelative(iso: string | null): string {
   return whole === 1 ? "1 day ago" : `${whole} days ago`;
 }
 
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+function ordinal(day: number): string {
+  const teen = day % 100 >= 11 && day % 100 <= 13;
+  const suffix = teen ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[day % 10] ?? "th";
+  return `${day}${suffix}`;
+}
+
+/** `2026-11-06` → `6th November 2026`. */
+export function formatLongDate(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  if (!year || !month || !day) return date;
+  return `${ordinal(day)} ${MONTHS[month - 1]} ${year}`;
+}
+
 /** Floor used when the dashboard asks for every stored day. */
 export const ALL_TIME_START = "2015-01-01";
 

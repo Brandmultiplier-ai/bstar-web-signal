@@ -3,8 +3,8 @@
  *
  * Used to load the first real Clarity data without a service-role key, by
  * applying the generated statements through the Supabase MCP connection. Once
- * SUPABASE_SERVICE_ROLE_KEY is set, POST /api/sync does this directly and this
- * script is no longer needed.
+ * SUPABASE_SERVICE_ROLE_KEY is set, the scheduled /api/ingest/clarity run does
+ * this directly and this script is no longer needed.
  *
  *   node scripts/clarity-to-sql.mjs > .clarity-upsert.sql
  */

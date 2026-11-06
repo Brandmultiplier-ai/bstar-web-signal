@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Info } from "lucide-react";
+import { Eye } from "lucide-react";
 
 interface CardInfoButtonProps {
-  description: string;
+  description: React.ReactNode;
 }
 
 export function CardInfoButton({ description }: CardInfoButtonProps) {
@@ -60,7 +60,7 @@ export function CardInfoButton({ description }: CardInfoButtonProps) {
       <button
         ref={buttonRef}
         type="button"
-        aria-label="What this card shows"
+        aria-label="What this card shows" title="What this card shows"
         aria-expanded={open}
         onClick={(event) => {
           event.preventDefault();
@@ -72,14 +72,14 @@ export function CardInfoButton({ description }: CardInfoButtonProps) {
           updatePosition();
           setOpen(true);
         }}
-        className="w-5 h-5 rounded-full flex items-center justify-center cursor-pointer shrink-0 transition-all"
+        className="w-6 h-6 rounded-full flex items-center justify-center cursor-pointer shrink-0 transition-all"
         style={{
           color: open ? "var(--nos-accent-2)" : "var(--nos-text-muted)",
           background: open ? "var(--nos-accent-muted)" : "transparent",
           border: `1px solid ${open ? "var(--nos-accent-border)" : "transparent"}`,
         }}
       >
-        <Info size={11} strokeWidth={2.5} />
+        <Eye size={13} strokeWidth={2.2} />
       </button>
 
       {open &&
@@ -117,10 +117,10 @@ export function CardInfoButton({ description }: CardInfoButtonProps) {
               }}
             />
             <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-              <Info size={12} style={{ color: "var(--nos-accent-2)", marginTop: 2, flexShrink: 0 }} />
-              <p style={{ fontSize: 12, lineHeight: 1.55, color: "var(--nos-text-secondary)", margin: 0 }}>
+              <Eye size={12} style={{ color: "var(--nos-accent-2)", marginTop: 2, flexShrink: 0 }} />
+              <div style={{ fontSize: 12, lineHeight: 1.55, color: "var(--nos-text-secondary)", margin: 0 }}>
                 {description}
-              </p>
+              </div>
             </div>
           </div>,
           document.body

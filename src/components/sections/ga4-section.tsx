@@ -4,10 +4,11 @@ import { BarChart3 } from "lucide-react";
 
 import { useGa4 } from "@/lib/hooks";
 import {
-  InsightCard,
+  InfoEye,
   Panel,
   QueryState,
   SimpleTable,
+  SubHeading,
   Stat,
   StatGrid,
   formatDuration,
@@ -32,11 +33,8 @@ function shownSum(rows: Array<{ value: number }>): number {
     .reduce((sum, row) => sum + row.value, 0);
 }
 
-function CoverageLine({ text }: { text: string | null }) {
-  if (!text) return null;
-  return (
-    <p className="mb-2 text-[11px] leading-relaxed text-[var(--nos-text-muted)]">{text}</p>
-  );
+function withSortHint(what: string, coverage: string | null): string[] {
+  return [what, coverage ?? "", "Click a column header to sort."].filter(Boolean);
 }
 import { REPORT_BLURBS, SOURCE_WINDOW_NOTES } from "@/lib/summaries";
 
@@ -49,6 +47,7 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
       title="Google Analytics"
       subtitle={`Stored traffic for ${site.domain}. Date chips re-read these tables — they never call Google.`}
       note={[SOURCE_WINDOW_NOTES.ga4, data?.freshness.note].filter(Boolean).join(" ")}
+      info={REPORT_BLURBS.ga4}
       source="ga4"
       freshness={data?.freshness}
       icon={BarChart3}
@@ -57,15 +56,6 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
         <QueryState isLoading={isLoading} error={error} />
       ) : (
         <div className="space-y-6">
-          <InsightCard
-            title="What this report is"
-            body={REPORT_BLURBS.ga4}
-            insight={
-              data.totals.sessions > 0
-                ? `${formatNumber(data.totals.sessions)} sessions · ${formatPercent(data.totals.bounceRate)} bounced · top landing ${data.landingPages[0]?.page_path ?? "—"}.`
-                : "No stored sessions in this window yet."
-            }
-          />
           <StatGrid>
             <Stat label="Sessions" value={formatNumber(data.totals.sessions)} />
             <Stat label="Users" value={formatNumber(data.totals.users)} />
@@ -76,6 +66,7 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
             <Stat label="Avg. duration" value={formatDuration(data.totals.avgSessionDuration)} />
             <Stat
               label="Pages / session"
+              tip="Average pages viewed per session."
               value={
                 data.totals.pagesPerSession === null
                   ? "—"
@@ -232,14 +223,15 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
           </div>
 
           <div>
-            <h3 className="mb-2 text-xs font-medium text-[var(--nos-text-muted)]">
-              Landing page detail
-            </h3>
-            <CoverageLine
-              text={partialCoverage(
-                data.landingPages.reduce((sum, row) => sum + row.sessions, 0),
-                data.totals.sessions,
-                "sessions",
+            <SubHeading
+              title="Landing pages"
+              info={withSortHint(
+                "The first page of each session.",
+                partialCoverage(
+                  data.landingPages.reduce((sum, row) => sum + row.sessions, 0),
+                  data.totals.sessions,
+                  "sessions",
+                ),
               )}
             />
             <SimpleTable
@@ -282,12 +274,15 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
           </div>
 
           <div>
-            <h3 className="mb-2 text-xs font-medium text-[var(--nos-text-muted)]">Page detail</h3>
-            <CoverageLine
-              text={partialCoverage(
-                data.topPages.reduce((sum, row) => sum + row.pageviews, 0),
-                data.totals.pageviews,
-                "pageviews",
+            <SubHeading
+              title="All pages"
+              info={withSortHint(
+                "Every page viewed, wherever the session started.",
+                partialCoverage(
+                  data.topPages.reduce((sum, row) => sum + row.pageviews, 0),
+                  data.totals.pageviews,
+                  "pageviews",
+                ),
               )}
             />
             <SimpleTable
@@ -335,7 +330,10 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
           </div>
 
           <div>
-            <h3 className="mb-2 text-xs font-medium text-[var(--nos-text-muted)]">Source / medium detail</h3>
+            <SubHeading
+              title="Source / medium"
+              info={withSortHint("Where sessions came from, as GA4 records source and medium.", null)}
+            />
             <SimpleTable
               rows={data.topSources}
               empty="No source data stored in this range."
@@ -368,12 +366,13 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
           </div>
 
           <div>
-            <h3 className="mb-2 text-xs font-medium text-[var(--nos-text-muted)]">Key events</h3>
-            {data.freshness.note && (
-              <p className="mb-2 text-[11px] leading-relaxed text-[var(--nos-text-muted)]">
-                Last pull note: {data.freshness.note}
-              </p>
-            )}
+            <SubHeading
+              title="Key events"
+              info={[
+                "Conversion actions tracked in GA4, broken out by where on the page they fired.",
+                data.freshness.note ? `Last pull note: ${data.freshness.note}` : "",
+              ].filter(Boolean)}
+            />
             {data.keyEvents.some((event) => event.total > 0) ? (
               <div className="grid gap-5 lg:grid-cols-2">
                 {data.keyEvents
@@ -384,7 +383,12 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
                       className="rounded-2xl border border-[var(--border)] bg-white/[0.03] p-4"
                     >
                       <p className="mb-3 flex items-baseline justify-between gap-3">
-                        <span className="text-sm font-semibold text-white">{event.label}</span>
+                        <span className="flex items-center gap-1.5 text-sm font-semibold text-white">
+                          {event.label}
+                          <InfoEye
+                            text={`How many times ${event.label.toLowerCase()} fired in this range, by placement and page.`}
+                          />
+                        </span>
                         <span className="text-lg font-bold tabular-nums text-white">
                           {formatNumber(event.total)}
                         </span>

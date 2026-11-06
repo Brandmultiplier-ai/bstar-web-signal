@@ -10,22 +10,14 @@ import {
   LayoutDashboard,
   LogOut,
   MousePointerClick,
-  RefreshCw,
   Search,
   Sparkles,
 } from "lucide-react";
 
 import { prefetchView, useSites, useSummary, type ReportView } from "@/lib/hooks";
-import {
-  RANGE_PRESETS,
-  dateFilterFromStore,
-  dateFilterLabel,
-  useDashboardStore,
-  type DateFilter,
-  type RangePreset,
-} from "@/store/dashboard-store";
-import { addDays, latestCompleteDay, toDateString } from "@/lib/dates";
+import { dateFilterFromStore, useDashboardStore, type DateFilter } from "@/store/dashboard-store";
 import { createBrowserSupabase } from "@/lib/supabase/client";
+import { DateRangePicker } from "@/components/date-range-picker";
 import { Breadcrumbs, GradientRule, IconTile } from "@/components/vision";
 import { Ga4Section } from "@/components/sections/ga4-section";
 import { GscSection } from "@/components/sections/gsc-section";
@@ -223,12 +215,10 @@ export function DashboardShell() {
             <h1 className="mt-1 truncate text-[26px] font-bold leading-tight text-white">
               {activeView.label}
             </h1>
-            <p className="text-xs text-[var(--nos-text-secondary)]">
-              {reportScope} · {dateFilterLabel(range)} · stored data only
-            </p>
+            <p className="text-xs text-[var(--nos-text-secondary)]">{reportScope}</p>
           </div>
 
-          <RangeControls />
+          <DateRangePicker />
         </header>
 
         <div className="mx-auto flex w-full max-w-[1600px] gap-2 overflow-x-auto px-6 pb-4 lg:hidden">
@@ -268,7 +258,6 @@ export function DashboardShell() {
         </div>
 
         <div className="mx-auto w-full max-w-[1600px] flex-1 px-6 pb-12">
-          {selectedSite && <PullAlert site={selectedSite} range={range} />}
           {view === "summary" && selectedSite && (
             <SummarySection
               site={selectedSite}
@@ -301,90 +290,6 @@ export function DashboardShell() {
           {view === "clarity" && <ClaritySection site={selectedSite} range={range} />}
           {view === "calendly" && <CalendlySection range={range} />}
         </div>
-      </div>
-
-      <RefreshButton />
-    </div>
-  );
-}
-
-function presetWindow(days: number): { start: string; end: string } {
-  const end = latestCompleteDay();
-  return {
-    start: toDateString(addDays(new Date(`${end}T00:00:00Z`), -(days - 1))),
-    end,
-  };
-}
-
-function RangeControls() {
-  const { rangeDays, allTime, customStart, customEnd, setRangeDays, setAllTime, setCustomRange } =
-    useDashboardStore();
-  const resolved = customStart && customEnd ? { start: customStart, end: customEnd } : presetWindow(rangeDays);
-  const [draftStart, setDraftStart] = useState(resolved.start);
-  const [draftEnd, setDraftEnd] = useState(resolved.end);
-  const yesterday = latestCompleteDay();
-
-  useEffect(() => {
-    setDraftStart(resolved.start);
-    setDraftEnd(resolved.end);
-  }, [resolved.start, resolved.end]);
-
-  const dirty = draftStart !== resolved.start || draftEnd !== resolved.end;
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-white/5 p-1">
-        {RANGE_PRESETS.map((preset) => {
-          const active = !customStart && !allTime && rangeDays === preset;
-          return (
-            <button
-              key={preset}
-              onClick={() => setRangeDays(preset as RangePreset)}
-              className={`rounded-full px-3.5 py-1.5 text-xs transition-colors ${
-                active ? "font-bold text-white" : "text-[var(--nos-text-secondary)]"
-              }`}
-              style={active ? { background: "var(--vui-gradient-brand)" } : undefined}
-            >
-              {preset}d
-            </button>
-          );
-        })}
-        <button
-          onClick={() => setAllTime()}
-          className={`rounded-full px-3.5 py-1.5 text-xs transition-colors ${
-            allTime && !customStart ? "font-bold text-white" : "text-[var(--nos-text-secondary)]"
-          }`}
-          style={allTime && !customStart ? { background: "var(--vui-gradient-brand)" } : undefined}
-        >
-          All time
-        </button>
-      </div>
-      <div className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white/5 px-2 py-1">
-        <input
-          type="date"
-          value={draftStart}
-          max={yesterday}
-          onChange={(event) => setDraftStart(event.target.value)}
-          className="bg-transparent text-xs text-white outline-none [color-scheme:dark]"
-          aria-label="Range start"
-        />
-        <span className="text-[10px] text-[var(--nos-text-muted)]">to</span>
-        <input
-          type="date"
-          value={draftEnd}
-          max={yesterday}
-          onChange={(event) => setDraftEnd(event.target.value)}
-          className="bg-transparent text-xs text-white outline-none [color-scheme:dark]"
-          aria-label="Range end"
-        />
-        <button
-          disabled={!dirty || !draftStart || !draftEnd}
-          onClick={() => setCustomRange(draftStart, draftEnd)}
-          className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-40"
-          style={dirty ? { background: "var(--vui-gradient-brand)" } : undefined}
-        >
-          Apply
-        </button>
       </div>
     </div>
   );
@@ -436,65 +341,9 @@ function FreshnessCard({ site, range }: { site: SiteSummary; range: DateFilter }
   );
 }
 
-function PullAlert({ site, range }: { site: SiteSummary; range: DateFilter }) {
-  const { data } = useSummary(site.id, range);
-  if (!data) return null;
-  const problems = pullRows(site, data.freshness).filter((row) => row.state !== "fresh");
-  if (problems.length === 0) return null;
-
-  return (
-    <div
-      className="mb-5 rounded-2xl px-4 py-3 text-sm text-white"
-      style={{ border: "1px solid var(--nos-negative)", background: "rgba(227,26,26,0.12)" }}
-    >
-      <p className="font-semibold">A scheduled pull failed or is overdue.</p>
-      <ul className="mt-1 space-y-1 text-xs text-white/80">
-        {problems.map((row) => (
-          <li key={row.source}>
-            {row.label}: {row.message}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 function stateWord(state: FreshnessState): string {
   if (state === "failing") return "Failed";
   if (state === "stale") return "Overdue";
   if (state === "never") return "No pull yet";
   return "Fresh";
-}
-
-function RefreshButton() {
-  const queryClient = useQueryClient();
-  const [state, setState] = useState<"idle" | "syncing" | "error">("idle");
-
-  return (
-    <button
-      aria-label="Sync data sources"
-      title="Pull fresh data from GA4, Search Console, Clarity and Calendly"
-      disabled={state === "syncing"}
-      onClick={async () => {
-        setState("syncing");
-        try {
-          const response = await fetch("/api/sync", { method: "POST" });
-          if (!response.ok) throw new Error(String(response.status));
-          await queryClient.invalidateQueries();
-          setState("idle");
-        } catch {
-          setState("error");
-          setTimeout(() => setState("idle"), 4000);
-        }
-      }}
-      className="fixed bottom-6 right-6 z-30 flex size-12 items-center justify-center rounded-full text-white transition-opacity hover:opacity-90 disabled:opacity-70"
-      style={{
-        background:
-          state === "error" ? "var(--nos-negative)" : "var(--vui-gradient-brand)",
-        boxShadow: "var(--vui-shadow-blue)",
-      }}
-    >
-      <RefreshCw size={18} className={state === "syncing" ? "animate-spin" : undefined} />
-    </button>
-  );
 }

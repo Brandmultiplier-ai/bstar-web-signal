@@ -4,12 +4,12 @@ import { MousePointerClick } from "lucide-react";
 
 import { useClarity } from "@/lib/hooks";
 import {
-  InsightCard,
   Panel,
   QueryState,
   RankList,
   SimpleTable,
   Stat,
+  SubHeading,
   StatGrid,
   formatDuration,
   formatNumber,
@@ -69,6 +69,7 @@ export function ClaritySection({
           : "Shared project. Date changes read stored days only."
       }
       note={[SOURCE_WINDOW_NOTES.clarity, clarityStatusText(data?.freshness)].filter(Boolean).join(" ")}
+      info={REPORT_BLURBS.clarity}
       source="clarity"
       freshness={data?.freshness}
       icon={MousePointerClick}
@@ -77,15 +78,6 @@ export function ClaritySection({
         <QueryState isLoading={isLoading} error={error} />
       ) : (
         <div className="space-y-6">
-          <InsightCard
-            title="What this report is"
-            body={REPORT_BLURBS.clarity}
-            insight={
-              data.totals.sessions > 0
-                ? `${formatNumber(data.totals.sessions)} sessions on stored pages in this window.`
-                : "No Clarity pages stored in this window yet. Each successful pull adds one day; older saved days stay."
-            }
-          />
 
           <StatGrid>
             <Stat label="Sessions" value={formatNumber(data.totals.sessions)} />
@@ -136,7 +128,7 @@ export function ClaritySection({
               <Stat
                 label="Active time"
                 value={formatDuration(data.totals.activeTimeSeconds)}
-                hint="Time actually interacting with the page"
+                tip="Average time per session spent actually interacting with the page."
               />
             )}
           </StatGrid>
@@ -285,22 +277,18 @@ export function ClaritySection({
           )}
 
           <div>
-            <h3 className="mb-2 text-xs font-medium text-[var(--nos-text-muted)]">
-              Page behaviour
-            </h3>
-            {pageCoverage && (
-              <p className="mb-2 text-[11px] leading-relaxed text-[var(--nos-text-muted)]">
-                {pageCoverage}
-              </p>
-            )}
+            <SubHeading
+              title="Page behaviour"
+              info={[
+                pageCoverage ?? "",
+                "Click a column header to sort. Rates are session-weighted across the range.",
+              ].filter(Boolean)}
+            />
             <SimpleTable
               rows={data.topPages}
               empty="No Clarity pages stored in this range yet."
               columns={pageColumns({ hasScroll, hasExcessive, hasRage, hasDead, hasQuick, hasJs })}
             />
-            <p className="mt-2 text-[11px] text-[var(--nos-text-muted)]">
-              Click a column header to sort. Rates are session-weighted across the range.
-            </p>
           </div>
 
           {(hasRage || hasDead) && (

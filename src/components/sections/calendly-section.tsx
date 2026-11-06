@@ -4,8 +4,8 @@ import { CalendarDays } from "lucide-react";
 
 import { useCalendly } from "@/lib/hooks";
 import {
-  InsightCard,
   Panel,
+  SubHeading,
   QueryState,
   RankList,
   SimpleTable,
@@ -52,6 +52,18 @@ export function CalendlySection({ range }: { range: DateFilter }) {
       title="Conversions"
       subtitle="Counted by the day the booking was created. A reschedule counts once, on the original day. Primary, Partner, and Founder-relayed are never added together."
       note={SOURCE_WINDOW_NOTES.calendly}
+      info={[
+        REPORT_BLURBS.calendly,
+        data
+          ? `${formatNumber(data.totals.excluded)} rows in this range are excluded (tests, company domains, personal calendar, interviews, and event types outside the taxonomy). ${
+              data.totals.attributionGaps > 0
+                ? `${formatNumber(data.totals.attributionGaps)} Primary or Partner bookings have no UTM.`
+                : "No Primary or Partner booking in this range is missing a UTM."
+            } Founder-relayed bookings without a UTM are not an attribution failure.`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       source="calendly"
       freshness={data?.freshness}
       icon={CalendarDays}
@@ -60,7 +72,6 @@ export function CalendlySection({ range }: { range: DateFilter }) {
         <QueryState isLoading={isLoading} error={error} />
       ) : (
         <div className="space-y-6">
-          <InsightCard title="What this report is" body={REPORT_BLURBS.calendly} />
           <StatGrid>
             <Stat
               label="Primary"
@@ -84,15 +95,6 @@ export function CalendlySection({ range }: { range: DateFilter }) {
             />
           </StatGrid>
 
-          <p className="text-xs leading-relaxed text-[var(--nos-text-muted)]">
-            {formatNumber(data.totals.excluded)} rows in this range are excluded (tests, company
-            domains, personal calendar, interviews, and event types outside the taxonomy).
-            {data.totals.attributionGaps > 0
-              ? ` ${formatNumber(data.totals.attributionGaps)} Primary or Partner bookings have no UTM.`
-              : " No Primary or Partner booking in this range is missing a UTM."}{" "}
-            Founder-relayed bookings without a UTM are not an attribution failure.
-          </p>
-
           {primaryByDay.length > 1 && (
             <HistogramBar
               data={primaryByDay}
@@ -105,12 +107,14 @@ export function CalendlySection({ range }: { range: DateFilter }) {
 
           <div className="grid gap-6 lg:grid-cols-2">
             <RankList
-              title="Booked calls by event type (excluding cancelled)"
+              title="By event type"
+              info="Booked calls in this range by Calendly event type. Cancelled bookings are left out."
               rows={countBy(active, (row) => row.eventName ?? "(unnamed)")}
               empty="No booked calls in this range."
             />
             <RankList
-              title="Booked calls by UTM source (excluding Founder-relayed)"
+              title="By UTM source"
+              info="Primary and Partner bookings by UTM source. Founder-relayed calls are left out because they carry no UTM by design."
               rows={countBy(
                 active.filter((row) => row.conversionClass !== "relay"),
                 (row) => row.utmSource ?? "(no UTM)",
@@ -121,9 +125,10 @@ export function CalendlySection({ range }: { range: DateFilter }) {
 
           {data.byProperty.length > 0 && (
             <div>
-              <h3 className="mb-2 text-xs font-medium text-[var(--color-ink-muted)]">
-                Primary by property
-              </h3>
+              <SubHeading
+                title="Primary by property"
+                info="Primary bookings split by the site whose booking page was used."
+              />
               <SimpleTable
                 rows={data.byProperty}
                 columns={[
@@ -139,13 +144,10 @@ export function CalendlySection({ range }: { range: DateFilter }) {
           )}
 
           <div>
-            <h3 className="mb-2 text-xs font-medium text-[var(--color-ink-muted)]">
-              Primary and Partner by attribution
-            </h3>
-            <p className="mb-2 text-[11px] text-[var(--nos-text-muted)]">
-              Founder-relayed bookings are left out of this table. A blank UTM on Quick Chat is
-              the normal case.
-            </p>
+            <SubHeading
+              title="Primary and Partner by attribution"
+              info="Founder-relayed bookings are left out of this table. A blank UTM on Quick Chat is the normal case."
+            />
             <SimpleTable
               rows={data.byAttribution}
               empty="No Primary or Partner bookings in this range."
@@ -167,7 +169,10 @@ export function CalendlySection({ range }: { range: DateFilter }) {
           </div>
 
           <div>
-            <h3 className="mb-2 text-xs font-medium text-[var(--color-ink-muted)]">Bookings</h3>
+            <SubHeading
+              title="Bookings"
+              info="Every counted and cancelled booking in this range. Click a column header to sort."
+            />
             <SimpleTable
               rows={data.bookings}
               empty="No conversions in this range."
@@ -190,9 +195,10 @@ export function CalendlySection({ range }: { range: DateFilter }) {
 
           {data.byExclusion.length > 0 && (
             <div>
-              <h3 className="mb-2 text-xs font-medium text-[var(--color-ink-muted)]">
-                Excluded from every count
-              </h3>
+              <SubHeading
+                title="Excluded from every count"
+                info="Bookings left out of every total above: tests, company-domain invitees, and event types that are not conversions."
+              />
               <SimpleTable
                 rows={data.byExclusion}
                 columns={[

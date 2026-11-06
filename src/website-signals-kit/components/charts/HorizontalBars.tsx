@@ -11,6 +11,7 @@ import {
 } from "recharts";
 
 import { CustomTooltip } from "./CustomTooltip";
+import { ChartTitle } from "./ChartTitle";
 
 function shortLabel(name: string): string {
   if (name === "/" || name === "(not set)") return name === "(not set)" ? "Unknown" : "/";
@@ -52,10 +53,7 @@ export function HorizontalBars({
 
   return (
     <div>
-      <p className="text-base font-bold text-[var(--nos-text-primary)]">{title}</p>
-      {subtitle && (
-        <p className="mb-2 mt-0.5 text-xs text-[var(--nos-text-secondary)]">{subtitle}</p>
-      )}
+      <ChartTitle title={title} subtitle={subtitle} />
       <ResponsiveContainer width="100%" height={height}>
         <BarChart
           data={rows}

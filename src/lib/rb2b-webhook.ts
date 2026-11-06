@@ -17,6 +17,13 @@ const FIELD_KEYS = {
 
 const MAPPED_KEYS = new Set<string>(Object.values(FIELD_KEYS).flat());
 
+/** Name and email stay out of raw. Company Name is a company, not a person. */
+function isPersonNameOrEmail(key: string): boolean {
+  if (key.toLowerCase() === "company name") return false;
+  const normalized = key.toLowerCase();
+  return normalized.includes("email") || normalized.includes("name");
+}
+
 export type Rb2bInsert = {
   site_id: string | null;
   company: string | null;
@@ -121,6 +128,7 @@ export function mapRb2bPayload(body: Record<string, unknown>): Rb2bInsert | "inv
   for (const [key, value] of Object.entries(body)) {
     if (MAPPED_KEYS.has(key)) continue;
     if (key === "secret" || key.toLowerCase() === SECRET_HEADER) continue;
+    if (isPersonNameOrEmail(key)) continue;
     raw[key] = value;
   }
 

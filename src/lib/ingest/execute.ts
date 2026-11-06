@@ -33,7 +33,7 @@ export async function executeIngest(ingestor: Ingestor): Promise<ExecuteOutcome>
     if (error) throw new Error(`Could not load site registry: ${error.message}`);
 
     const result = await ingestor.run({ admin, sites: (data ?? []) as Site[], window });
-    await completeRun(admin, run, result.rowsWritten);
+    await completeRun(admin, run, result.rowsWritten, result.note);
 
     return { ok: true, source: ingestor.source, window, ...result };
   } catch (error) {

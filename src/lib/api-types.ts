@@ -1,6 +1,11 @@
 import type { Ga4EventKey } from "@/lib/database.types";
 
-export type Freshness = { lastSuccessAt: string | null; lastErrorAt: string | null };
+export type Freshness = {
+  lastSuccessAt: string | null;
+  lastErrorAt: string | null;
+  /** Present when the latest successful pull left a gate warning. */
+  note?: string | null;
+};
 export type Range = { start: string; end: string };
 
 export type SiteSummary = {

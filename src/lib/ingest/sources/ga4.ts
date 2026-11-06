@@ -2,11 +2,14 @@ import type { protos } from "@google-analytics/data";
 
 import { createGa4Client } from "@/lib/clients/google";
 import { fromCompactDate } from "@/lib/dates";
+import { keyEventDimensionList, shrinkKeyEventDimensions } from "@/lib/ingest/ga4-key-events";
 import {
-  GA4_EVENT_NAME_TO_KEY,
-  GA4_KEY_EVENTS,
-  GA4_PLACEMENT_DIMENSION,
-} from "@/lib/sources";
+  gateEvent,
+  gateNote,
+  parameterName,
+  unappliedGates,
+} from "@/lib/ga4-event-rules";
+import { GA4_EVENT_NAME_TO_KEY, GA4_KEY_EVENTS } from "@/lib/sources";
 import { foldByKey, upsertRows } from "@/lib/ingest/upsert";
 import type { Ingestor, IngestContext, IngestResult } from "@/lib/ingest/types";
 import type {
@@ -425,15 +428,43 @@ async function ingestSources(ctx: IngestContext, group: PropertyGroup): Promise<
   return keepTopPerSiteDay(folded, (r) => r.sessions, TOP_SOURCES_PER_DAY);
 }
 
+type KeyEventPull = {
+  rows: Ga4KeyEventDaily[];
+  excluded: Record<string, number>;
+  unapplied: Record<string, string[]>;
+};
+
+/**
+ * Asks GA4 for every custom dimension the rules table names. An unregistered
+ * dimension rejects the whole report, so the next attempt drops only that
+ * dimension. Events whose gate could not run are kept and listed in `unapplied`.
+ */
+async function loadKeyEventReport(
+  request: Omit<protos.google.analytics.data.v1beta.IRunReportRequest, "dimensions">,
+): Promise<{ rows: Row[]; dimensions: string[] }> {
+  let dimensions = keyEventDimensionList();
+  for (;;) {
+    try {
+      const rows = await runReport({
+        ...request,
+        dimensions: dimensions.map((name) => ({ name })),
+      });
+      return { rows, dimensions };
+    } catch (error) {
+      const next = shrinkKeyEventDimensions(dimensions, error);
+      if (!next) throw error;
+      dimensions = next;
+    }
+  }
+}
+
 /**
  * The five named key events, with the page path and placement they fired from.
  * Filtered to our event names server-side so we do not pull the full event
- * catalogue for a long tail we never display.
+ * catalogue for a long tail we never display. After the report returns, each
+ * event with a rule must have its required parameters set.
  */
-async function ingestKeyEvents(
-  ctx: IngestContext,
-  group: PropertyGroup,
-): Promise<Ga4KeyEventDaily[]> {
+async function ingestKeyEvents(ctx: IngestContext, group: PropertyGroup): Promise<KeyEventPull> {
   const eventNames = Object.values(GA4_KEY_EVENTS).map((e) => e.gaEventName);
   const request = {
     property: `properties/${group.propertyId}`,
@@ -446,52 +477,56 @@ async function ingestKeyEvents(
       },
     },
   };
-  const coreDimensions = [
-    { name: "date" },
-    { name: "hostName" },
-    { name: "eventName" },
-    { name: "pagePath" },
-  ];
-
-  let rows: Row[];
-  let hasPlacement = true;
-  try {
-    rows = await runReport({
-      ...request,
-      dimensions: [...coreDimensions, { name: GA4_PLACEMENT_DIMENSION }],
-    });
-  } catch {
-    // A property that never registered `customEvent:placement` rejects the
-    // whole report. Fall back so the named events still persist.
-    rows = await runReport({ ...request, dimensions: coreDimensions });
-    hasPlacement = false;
-  }
+  const loaded = await loadKeyEventReport(request);
+  const unapplied = unappliedGates(loaded.dimensions);
+  const excluded: Record<string, number> = {};
+  const indexOf = (name: string) => {
+    const index = loaded.dimensions.indexOf(name);
+    return index === -1 ? null : index;
+  };
+  const placementAt = indexOf("customEvent:placement");
 
   const mapped: Ga4KeyEventDaily[] = [];
-  for (const row of rows) {
+  for (const row of loaded.rows) {
     const siteId = resolveSiteId(group, row.dimensionValues?.[1]?.value);
     if (!siteId) continue;
 
-    const eventKey = GA4_EVENT_NAME_TO_KEY[dimension(row, 2)];
+    const eventName = dimension(row, 2);
+    const eventKey = GA4_EVENT_NAME_TO_KEY[eventName];
     // Guard against a filter that matched case-insensitively but does not map
     // back to one of our five keys; the table's check constraint would reject.
     if (!eventKey) continue;
+
+    const values: Record<string, string | null> = {};
+    for (const name of loaded.dimensions) {
+      const index = indexOf(name);
+      if (index === null) continue;
+      values[parameterName(name)] = dimension(row, index);
+    }
+    if (gateEvent(eventName, values, loaded.dimensions) === "exclude") {
+      excluded[eventName] = (excluded[eventName] ?? 0) + 1;
+      continue;
+    }
 
     mapped.push({
       site_id: siteId,
       date: fromCompactDate(dimension(row, 0)),
       event_key: eventKey,
       page_path: dimension(row, 3),
-      placement: hasPlacement ? dimension(row, 4) : UNSET,
+      placement: placementAt === null ? UNSET : dimension(row, placementAt),
       count: metric(row, 0),
     });
   }
 
-  return foldByKey(
-    mapped,
-    (r) => `${r.site_id}|${r.date}|${r.event_key}|${r.page_path}|${r.placement}`,
-    (a, b) => ({ ...a, count: a.count + b.count }),
-  );
+  return {
+    rows: foldByKey(
+      mapped,
+      (r) => `${r.site_id}|${r.date}|${r.event_key}|${r.page_path}|${r.placement}`,
+      (a, b) => ({ ...a, count: a.count + b.count }),
+    ),
+    excluded,
+    unapplied,
+  };
 }
 
 /**
@@ -581,6 +616,8 @@ export const ga4Ingestor: Ingestor = {
       ga4_landing_daily: 0,
       ga4_os_daily: 0,
     };
+    const excluded: Record<string, number> = {};
+    const unapplied: Record<string, string[]> = {};
 
     for (const group of groups) {
       const [totals, pages, sources, keyEvents, countries, devices, channels, landings, os] =
@@ -595,6 +632,12 @@ export const ga4Ingestor: Ingestor = {
           ingestLandings(ctx, group),
           ingestOperatingSystems(ctx, group),
         ]);
+      for (const [eventName, count] of Object.entries(keyEvents.excluded)) {
+        excluded[eventName] = (excluded[eventName] ?? 0) + count;
+      }
+      for (const [eventName, parameters] of Object.entries(keyEvents.unapplied)) {
+        unapplied[eventName] = parameters;
+      }
 
       details.ga4_daily += await upsertRows(ctx.admin, "ga4_daily", totals, "site_id,date");
       details.ga4_page_daily += await upsertRows(
@@ -612,7 +655,7 @@ export const ga4Ingestor: Ingestor = {
       details.ga4_key_events_daily += await upsertRows(
         ctx.admin,
         "ga4_key_events_daily",
-        keyEvents,
+        keyEvents.rows,
         "site_id,date,event_key,page_path,placement",
       );
       details.ga4_country_daily += await upsertRows(
@@ -642,10 +685,18 @@ export const ga4Ingestor: Ingestor = {
       details.ga4_os_daily += await upsertRows(ctx.admin, "ga4_os_daily", os, "site_id,date,os");
     }
 
+    const rowsWritten = Object.values(details).reduce((sum, n) => sum + n, 0);
+    for (const [eventName, count] of Object.entries(excluded)) {
+      details[`excluded_${eventName}`] = count;
+    }
+    const note = gateNote(unapplied, excluded);
+    if (note) console.info(`[ga4] ${note}`);
+
     return {
-      rowsWritten: Object.values(details).reduce((sum, n) => sum + n, 0),
+      rowsWritten,
       details,
       skipped,
+      note,
     };
   },
 };

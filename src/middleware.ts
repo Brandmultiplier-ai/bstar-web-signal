@@ -63,9 +63,10 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Everything except Next internals, static assets, and the two
-     * secret-authenticated ingest paths.
+     * Everything except Next internals, static assets, the secret-authenticated
+     * ingest and webhook paths, and the read APIs. The read APIs verify the
+     * session themselves in requireReader and answer 401 without one.
      */
-    "/((?!_next/static|_next/image|favicon.ico|api/ingest|api/webhooks).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/ingest|api/webhooks|api/metrics|api/sites).*)",
   ],
 };

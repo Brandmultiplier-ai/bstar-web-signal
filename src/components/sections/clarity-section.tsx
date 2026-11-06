@@ -4,21 +4,23 @@ import { MousePointerClick } from "lucide-react";
 
 import { useClarity } from "@/lib/hooks";
 import {
-  InsightCard,
   Panel,
   QueryState,
+  RankList,
   SimpleTable,
   Stat,
+  SubHeading,
   StatGrid,
   formatDuration,
   formatNumber,
   formatRate,
+  type TableColumn,
 } from "@/components/ui";
 import { DonutChart } from "@/website-signals-kit/components/charts/DonutChart";
 import { HistogramBar } from "@/website-signals-kit/components/charts/HistogramBar";
 import { HorizontalBars } from "@/website-signals-kit/components/charts/HorizontalBars";
 import { TrendLine } from "@/website-signals-kit/components/charts/TrendLine";
-import type { SiteSummary } from "@/lib/api-types";
+import type { ClarityResponse, SiteSummary } from "@/lib/api-types";
 import type { DateFilter } from "@/store/dashboard-store";
 import { partialCoverage } from "@/lib/format";
 import { clarityStatusText } from "@/lib/freshness";
@@ -41,7 +43,7 @@ export function ClaritySection({
   site?: SiteSummary;
   range: DateFilter;
 }) {
-  const { data, isLoading, error } = useClarity(range, site?.id);
+  const { data, isLoading, isFetching, error } = useClarity(range, site?.id);
 
   const pageCoverage = data
     ? partialCoverage(
@@ -59,6 +61,7 @@ export function ClaritySection({
 
   return (
     <Panel
+      refreshing={Boolean(data) && isFetching}
       title="Microsoft Clarity"
       subtitle={
         site
@@ -66,6 +69,7 @@ export function ClaritySection({
           : "Shared project. Date changes read stored days only."
       }
       note={[SOURCE_WINDOW_NOTES.clarity, clarityStatusText(data?.freshness)].filter(Boolean).join(" ")}
+      info={REPORT_BLURBS.clarity}
       source="clarity"
       freshness={data?.freshness}
       icon={MousePointerClick}
@@ -74,15 +78,6 @@ export function ClaritySection({
         <QueryState isLoading={isLoading} error={error} />
       ) : (
         <div className="space-y-6">
-          <InsightCard
-            title="What this report is"
-            body={REPORT_BLURBS.clarity}
-            insight={
-              data.totals.sessions > 0
-                ? `${formatNumber(data.totals.sessions)} sessions on stored pages in this window.`
-                : "No Clarity pages stored in this window yet. Each successful pull adds one day; older saved days stay."
-            }
-          />
 
           <StatGrid>
             <Stat label="Sessions" value={formatNumber(data.totals.sessions)} />
@@ -133,7 +128,7 @@ export function ClaritySection({
               <Stat
                 label="Active time"
                 value={formatDuration(data.totals.activeTimeSeconds)}
-                hint="Time actually interacting with the page"
+                tip="Average time per session spent actually interacting with the page."
               />
             )}
           </StatGrid>
@@ -282,97 +277,86 @@ export function ClaritySection({
           )}
 
           <div>
-            <h3 className="mb-2 text-xs font-medium text-[var(--nos-text-muted)]">
-              Page behaviour
-            </h3>
-            {pageCoverage && (
-              <p className="mb-2 text-[11px] leading-relaxed text-[var(--nos-text-muted)]">
-                {pageCoverage}
-              </p>
-            )}
+            <SubHeading
+              title="Page behaviour"
+              info={[
+                pageCoverage ?? "",
+                "Click a column header to sort. Rates are session-weighted across the range.",
+              ].filter(Boolean)}
+            />
             <SimpleTable
               rows={data.topPages}
               empty="No Clarity pages stored in this range yet."
-              columns={[
-                { header: "Host", cell: (row) => row.host },
-                { header: "Path", cell: (row) => row.pagePath },
-                { header: "Sessions", align: "right", cell: (row) => formatNumber(row.sessions) },
-                {
-                  header: "Users",
-                  align: "right",
-                  cell: (row) => formatNumber(row.distinctUsers),
-                },
-                ...(hasScroll
-                  ? [
-                      {
-                        header: "Scroll",
-                        align: "right" as const,
-                        cell: (row: (typeof data.topPages)[number]) =>
-                          formatRate(row.scrollDepthPct),
-                      },
-                    ]
-                  : []),
-                ...(hasExcessive
-                  ? [
-                      {
-                        header: "Excessive",
-                        align: "right" as const,
-                        cell: (row: (typeof data.topPages)[number]) =>
-                          formatRate(row.excessiveScrollPct),
-                      },
-                    ]
-                  : []),
-                {
-                  header: "Active",
-                  align: "right" as const,
-                  cell: (row: (typeof data.topPages)[number]) =>
-                    formatDuration(row.activeTimeSeconds),
-                },
-                ...(hasRage
-                  ? [
-                      {
-                        header: "Rage",
-                        align: "right" as const,
-                        cell: (row: (typeof data.topPages)[number]) =>
-                          formatRate(row.rageClickPct),
-                      },
-                    ]
-                  : []),
-                ...(hasDead
-                  ? [
-                      {
-                        header: "Dead",
-                        align: "right" as const,
-                        cell: (row: (typeof data.topPages)[number]) =>
-                          formatRate(row.deadClickPct),
-                      },
-                    ]
-                  : []),
-                ...(hasQuick
-                  ? [
-                      {
-                        header: "Quick back",
-                        align: "right" as const,
-                        cell: (row: (typeof data.topPages)[number]) =>
-                          formatRate(row.quickBackPct),
-                      },
-                    ]
-                  : []),
-                ...(hasJs
-                  ? [
-                      {
-                        header: "JS errors",
-                        align: "right" as const,
-                        cell: (row: (typeof data.topPages)[number]) =>
-                          formatRate(row.scriptErrorPct),
-                      },
-                    ]
-                  : []),
-              ]}
+              columns={pageColumns({ hasScroll, hasExcessive, hasRage, hasDead, hasQuick, hasJs })}
             />
           </div>
+
+          {(hasRage || hasDead) && (
+            <RankList
+              title={`Pages with the most click friction (rage plus dead clicks, pages with ${FRICTION_MIN_SESSIONS}+ sessions)`}
+              rows={data.topPages
+                .filter((row) => row.sessions >= FRICTION_MIN_SESSIONS)
+                .map((row) => ({
+                  name: `${row.host.replace(/^www\./, "")}${row.pagePath}`,
+                  value: (row.rageClickPct ?? 0) + (row.deadClickPct ?? 0),
+                }))
+                .filter((row) => row.value > 0)
+                .sort((a, b) => b.value - a.value)
+                .slice(0, CHART_ROWS)}
+              empty="No page with enough sessions shows rage or dead clicks."
+              format={(value) => formatRate(value)}
+            />
+          )}
         </div>
       )}
     </Panel>
   );
+}
+
+const FRICTION_MIN_SESSIONS = 5;
+
+type PageRow = ClarityResponse["topPages"][number];
+
+function pageColumns(show: {
+  hasScroll: boolean;
+  hasExcessive: boolean;
+  hasRage: boolean;
+  hasDead: boolean;
+  hasQuick: boolean;
+  hasJs: boolean;
+}): Array<TableColumn<PageRow>> {
+  const rate = (header: string, pick: (row: PageRow) => number | null): TableColumn<PageRow> => ({
+    header,
+    align: "right",
+    cell: (row) => formatRate(pick(row)),
+    sortValue: pick,
+  });
+  return [
+    { header: "Host", cell: (row) => row.host, sortValue: (row) => row.host },
+    { header: "Path", cell: (row) => row.pagePath, sortValue: (row) => row.pagePath },
+    {
+      header: "Sessions",
+      align: "right",
+      cell: (row) => formatNumber(row.sessions),
+      sortValue: (row) => row.sessions,
+    },
+    {
+      header: "Users",
+      align: "right",
+      cell: (row) => formatNumber(row.distinctUsers),
+      sortValue: (row) => row.distinctUsers,
+    },
+    ...(show.hasScroll ? [rate("Scroll", (row) => row.scrollDepthPct)] : []),
+    ...(show.hasExcessive ? [rate("Excessive", (row) => row.excessiveScrollPct)] : []),
+    {
+      header: "Active",
+      align: "right",
+      cell: (row) => formatDuration(row.activeTimeSeconds),
+      sortValue: (row) => row.activeTimeSeconds,
+    },
+    ...(show.hasRage ? [rate("Rage", (row) => row.rageClickPct)] : []),
+    ...(show.hasDead ? [rate("Dead", (row) => row.deadClickPct)] : []),
+    ...(show.hasQuick ? [rate("Quick back", (row) => row.quickBackPct)] : []),
+    ...(show.hasJs ? [rate("JS errors", (row) => row.scriptErrorPct)] : []),
+  ];
 }

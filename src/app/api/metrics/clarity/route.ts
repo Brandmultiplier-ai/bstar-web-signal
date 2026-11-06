@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { parseRange, readFreshness, requireReader } from "@/lib/read/request";
+import { readJson, startTimer } from "@/lib/read/respond";
 
 export const dynamic = "force-dynamic";
+export const preferredRegion = "hnd1";
+
+const TOP_PAGES = 60;
 
 /** Stored key for the shared project. It is real data, not a missing id. */
 const SHARED_CLARITY_PROJECT = "CLARITY_SHARED_PROJECT_ID";
@@ -18,8 +22,10 @@ const SHARED_CLARITY_PROJECT = "CLARITY_SHARED_PROJECT_ID";
  * no daily rows, so another project's days are not shown.
  */
 export async function GET(request: Request) {
+  const timer = startTimer();
   const auth = await requireReader();
   if (!auth.ok) return auth.response;
+  timer.mark("auth");
 
   const url = new URL(request.url);
   const range = parseRange(url);
@@ -41,7 +47,9 @@ export async function GET(request: Request) {
     (() => {
       let query = supabase
         .from("clarity_daily")
-        .select("*")
+        .select(
+          "date, sessions, unique_users, rage_click_pct, dead_click_pct, excessive_scroll_pct, quick_back_pct, scroll_depth_pct, active_time_seconds, script_error_pct",
+        )
         .gte("date", range.start)
         .lte("date", range.end)
         .order("date");
@@ -86,6 +94,7 @@ export async function GET(request: Request) {
       .eq("is_active", true),
     readFreshness(supabase, "clarity"),
   ]);
+  timer.mark("db");
 
   const error = daily.error ?? pages.error ?? breakdowns.error;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -189,7 +198,7 @@ export async function GET(request: Request) {
     }))
     .filter((row) => row.sessions > 0)
     .sort((a, b) => b.sessions - a.sessions)
-    .slice(0, 25);
+    .slice(0, TOP_PAGES);
 
   const pie = (dimension: string) => {
     const byKey = new Map<string, number>();
@@ -209,7 +218,7 @@ export async function GET(request: Request) {
     byHostMap.set(row.host, (byHostMap.get(row.host) ?? 0) + row.sessions);
   }
 
-  return NextResponse.json({
+  return readJson({
     range,
     freshness,
     coveredDomains: (sites.data ?? []).map((site) => site.domain),
@@ -236,7 +245,7 @@ export async function GET(request: Request) {
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value),
     topPages,
-  });
+  }, timer);
 }
 
 type PageDay = {

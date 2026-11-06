@@ -1,6 +1,6 @@
 import type { IngestSource } from "@/lib/database.types";
 import { daysSince, formatRelative } from "@/lib/dates";
-import { SOURCE_CADENCE_DAYS } from "@/lib/sources";
+import { SOURCE_CADENCE_DAYS, cadenceLabel } from "@/lib/sources";
 
 export type Freshness = {
   lastSuccessAt: string | null;
@@ -70,10 +70,41 @@ export function latestIso(values: Array<string | null | undefined>): string | nu
   return stamps.reduce((latest, stamp) => (new Date(stamp) > new Date(latest) ? stamp : latest));
 }
 
+export type RunRow = {
+  source: string;
+  status: string;
+  started_at: string;
+  finished_at: string | null;
+  error: string | null;
+};
+
+export type SourceFreshness = {
+  lastSuccessAt: string | null;
+  lastErrorAt: string | null;
+  note: string | null;
+  failureMessage: string | null;
+};
+
+/** One source's runs, newest first, folded into what the chip needs. */
+export function summarizeRuns(
+  rows: RunRow[],
+  deliveryFailure: string | null | undefined,
+  now = Date.now(),
+): SourceFreshness {
+  const success = rows.find((row) => row.status === "success");
+  const failure = rows.find((row) => row.status === "error");
+  return {
+    lastSuccessAt: success?.finished_at ?? null,
+    note: success?.error ?? null,
+    failureMessage: failure?.error ?? null,
+    lastErrorAt: latestIso([failure?.finished_at, abandonedRunAt(rows[0], now), deliveryFailure]),
+  };
+}
+
 /**
  * A failed or skipped pull is never described as a zero. "Late" uses the same
- * cadence as the schedule: Clarity daily, GA4, Search Console and Calendly
- * every 3 days.
+ * cadence as the schedule: Clarity, GA4 and Search Console daily, Calendly
+ * every 12 hours.
  */
 export function describeFreshness(
   source: IngestSource,
@@ -92,8 +123,8 @@ export function describeFreshness(
   const message = {
     fresh: `Updated ${formatRelative(lastSuccess)}`,
     failing: `Last run failed. Numbers on screen are from ${formatRelative(lastSuccess)}, not a zero for the missing pull.`,
-    stale: `Overdue — last success ${formatRelative(lastSuccess)}, expected every ${cadence}d. A missed pull is not a zero.`,
-    never: "Never fetched. Empty charts are a missing pull, not a zero.",
+    stale: `Overdue — last success ${formatRelative(lastSuccess)}, expected ${cadenceLabel(source)}. A missed pull is not a zero.`,
+    never: "No pull yet for this source. Empty charts are a missing pull, not a zero.",
   }[state];
 
   return { state, message };

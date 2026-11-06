@@ -11,9 +11,11 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // Data changes at most every 2 days, so aggressive refetching only
-            // costs us round-trips to our own database.
-            staleTime: 5 * 60_000,
+            // Stored data changes at most daily, so a cached answer is shown
+            // instantly and only re-read after 10 minutes. Cached reports stay
+            // for an hour so going back to a tab does not wait again.
+            staleTime: 10 * 60_000,
+            gcTime: 60 * 60_000,
             refetchOnWindowFocus: false,
             retry: 1,
           },

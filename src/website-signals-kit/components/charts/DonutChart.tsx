@@ -3,6 +3,7 @@
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { useState, useEffect } from "react";
 import { CustomTooltip } from "./CustomTooltip";
+import { ChartTitle } from "./ChartTitle";
 
 /** Vision UI series order: blue, cyan, purple, green, amber, red. */
 const CHART_COLORS = [
@@ -45,10 +46,7 @@ export function DonutChart({ data, title, subtitle, height = 240 }: DonutChartPr
 
   return (
     <div>
-      <p className="text-base font-bold text-[var(--nos-text-primary)]">{title}</p>
-      {subtitle && (
-        <p className="mb-2 mt-0.5 text-xs text-[var(--nos-text-secondary)]">{subtitle}</p>
-      )}
+      <ChartTitle title={title} subtitle={subtitle} />
       <ResponsiveContainer width="100%" height={height}>
         <PieChart>
           <Pie

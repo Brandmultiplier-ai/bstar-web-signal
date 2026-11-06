@@ -1,18 +1,25 @@
 import type { Ga4EventKey, IngestSource } from "@/lib/database.types";
 
 /**
- * Cadence per source, in days. These drive both the pg_cron schedules (see
- * supabase/migrations/0004_cron.sql and 0011_clarity_daily_cron.sql) and the
- * staleness threshold on the freshness badges, so the UI's idea of "late"
- * always matches the schedule.
+ * Cadence per source, in days. These must match the pg_cron schedules in
+ * supabase/migrations/0021_platform_cadence.sql, because they set the
+ * staleness threshold on the freshness badges.
  */
 export const SOURCE_CADENCE_DAYS: Record<IngestSource, number> = {
   clarity: 1,
-  ga4: 3,
-  gsc: 3,
-  calendly: 3,
+  ga4: 1,
+  gsc: 1,
+  calendly: 0.5,
   rb2b: 7,
 };
+
+/** "every 12 hours", "daily", "every 7 days". */
+export function cadenceLabel(source: IngestSource): string {
+  const days = SOURCE_CADENCE_DAYS[source];
+  if (days < 1) return `every ${Math.round(days * 24)} hours`;
+  if (days === 1) return "daily";
+  return `every ${days} days`;
+}
 
 export const SOURCE_LABELS: Record<IngestSource, string> = {
   ga4: "Google Analytics 4",

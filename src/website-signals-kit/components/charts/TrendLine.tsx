@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { memo } from "react";
 import { CustomTooltip } from "./CustomTooltip";
+import { ChartTitle } from "./ChartTitle";
 
 interface TrendLineProps {
   data: { date: string; value: number }[];
@@ -41,10 +42,7 @@ export const TrendLine = memo(function TrendLine({
 
   return (
     <div>
-      <p className="text-base font-bold text-[var(--nos-text-primary)]">{title}</p>
-      {subtitle && (
-        <p className="mb-3 mt-0.5 text-xs text-[var(--nos-text-secondary)]">{subtitle}</p>
-      )}
+      <ChartTitle title={title} subtitle={subtitle} />
       <div style={{ width: "100%", height }}>
         <ResponsiveContainer key={chartKey} width="100%" height={height}>
           <AreaChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>

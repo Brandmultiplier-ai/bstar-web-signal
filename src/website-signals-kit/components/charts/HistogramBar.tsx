@@ -12,6 +12,7 @@ import {
 } from "recharts";
 
 import { CustomTooltip } from "./CustomTooltip";
+import { ChartTitle } from "./ChartTitle";
 
 const SERIES = [
   { dataKey: "sessions", name: "Sessions", fill: "#0075ff" },
@@ -45,10 +46,7 @@ export function HistogramBar({
 
   return (
     <div>
-      <p className="text-base font-bold text-[var(--nos-text-primary)]">{title}</p>
-      {subtitle && (
-        <p className="mb-2 mt-0.5 text-xs text-[var(--nos-text-secondary)]">{subtitle}</p>
-      )}
+      <ChartTitle title={title} subtitle={subtitle} />
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }} barGap={2}>
           <CartesianGrid strokeDasharray="4 4" stroke="rgba(255,255,255,0.1)" vertical={false} />

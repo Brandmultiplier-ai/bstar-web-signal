@@ -3,7 +3,13 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import { clampReadRange } from "@/lib/dates";
+import {
+  addDays,
+  clampReadRange,
+  formatLongDate,
+  latestCompleteDay,
+  toDateString,
+} from "@/lib/dates";
 
 export const RANGE_PRESETS = [7, 28, 90] as const;
 export type RangePreset = (typeof RANGE_PRESETS)[number];
@@ -69,8 +75,21 @@ export function dateFilterSearch(filter: DateFilter): string {
   return `days=${filter.days ?? 28}`;
 }
 
+/** The window a filter covers, in `YYYY-MM-DD`. Null for All time. */
+export function dateFilterWindow(filter: DateFilter): { start: string; end: string } | null {
+  if (filter.all) return null;
+  if (filter.start && filter.end) return { start: filter.start, end: filter.end };
+  const end = latestCompleteDay();
+  const days = filter.days ?? 28;
+  return {
+    start: toDateString(addDays(new Date(`${end}T00:00:00Z`), -(days - 1))),
+    end,
+  };
+}
+
+/** `6th November 2026 to 10th November 2026`, or `All time`. */
 export function dateFilterLabel(filter: DateFilter): string {
-  if (filter.all) return "All time";
-  if (filter.start && filter.end) return `${filter.start} → ${filter.end}`;
-  return `Last ${filter.days ?? 28} days`;
+  const window = dateFilterWindow(filter);
+  if (!window) return "All time";
+  return `${formatLongDate(window.start)} to ${formatLongDate(window.end)}`;
 }

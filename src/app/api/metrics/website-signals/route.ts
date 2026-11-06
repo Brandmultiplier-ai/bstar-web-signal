@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { parseRange, rangeLengthDays, readFreshness, requireReader, requireSiteId } from "@/lib/read/request";
+import { readJson, startTimer } from "@/lib/read/respond";
 import { buildWebsiteData } from "@/lib/read/website-signals";
 
 export const dynamic = "force-dynamic";
+export const preferredRegion = "hnd1";
 
 /**
  * Everything the Website Signals view renders, in the kit's `WebsiteData`
@@ -11,8 +13,10 @@ export const dynamic = "force-dynamic";
  * own tables.
  */
 export async function GET(request: Request) {
+  const timer = startTimer();
   const auth = await requireReader();
   if (!auth.ok) return auth.response;
+  timer.mark("auth");
 
   const url = new URL(request.url);
   const siteId = requireSiteId(url);
@@ -49,12 +53,9 @@ export async function GET(request: Request) {
       readFreshness(supabase, "gsc"),
       readFreshness(supabase, "calendly"),
     ]);
+    timer.mark("db");
 
-    return NextResponse.json({
-      range,
-      data,
-      freshness: { ga4, clarity, gsc, calendly },
-    });
+    return readJson({ range, data, freshness: { ga4, clarity, gsc, calendly } }, timer);
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to build website signals" },

@@ -1,7 +1,7 @@
 "use client";
 
 import { useWebsiteSignals } from "@/lib/hooks";
-import { FreshnessBadge, QueryState, DataNote } from "@/components/ui";
+import { FreshnessBadge, InfoEye, QueryState } from "@/components/ui";
 import { WebsiteSignals } from "@/website-signals-kit/components/WebsiteSignals";
 import type { SiteSummary } from "@/lib/api-types";
 import type { DateFilter } from "@/store/dashboard-store";
@@ -42,9 +42,8 @@ export function WebsiteSignalsSection({
           <FreshnessBadge source="gsc" freshness={data.freshness.gsc} />
         )}
         <FreshnessBadge source="calendly" freshness={data.freshness.calendly} />
+        <InfoEye text={SOURCE_WINDOW_NOTES.overview} />
       </div>
-
-      <DataNote>{SOURCE_WINDOW_NOTES.overview}</DataNote>
 
       <WebsiteSignals data={data.data} />
     </div>

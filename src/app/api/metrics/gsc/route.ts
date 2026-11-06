@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
 
 import { parseRange, readFreshness, requireReader, requireSiteId } from "@/lib/read/request";
+import { readJson, startTimer } from "@/lib/read/respond";
 
 export const dynamic = "force-dynamic";
+export const preferredRegion = "hnd1";
 
 const TOP_QUERIES = 20;
+
+const POSITION_BANDS = [
+  { band: "Top 3", min: 0, max: 3 },
+  { band: "4 to 10", min: 3, max: 10 },
+  { band: "11 to 20", min: 10, max: 20 },
+  { band: "21 and lower", min: 20, max: Number.POSITIVE_INFINITY },
+];
 
 /** Collapse spacing, case, and invisible characters so one query is one row. */
 function normalizeQuery(query: string): string {
@@ -18,8 +27,10 @@ function normalizeQuery(query: string): string {
 
 /** Reads stored Search Console data only. Never touches the GSC API. */
 export async function GET(request: Request) {
+  const timer = startTimer();
   const auth = await requireReader();
   if (!auth.ok) return auth.response;
+  timer.mark("auth");
 
   const url = new URL(request.url);
   const siteId = requireSiteId(url);
@@ -28,7 +39,7 @@ export async function GET(request: Request) {
   const range = parseRange(url);
   const { supabase } = auth;
 
-  const [daily, queries, indexStatus, freshness] = await Promise.all([
+  const [daily, queries, indexStatus, indexTrend, freshness] = await Promise.all([
     supabase
       .from("gsc_daily")
       .select("date, clicks, impressions, ctr, avg_position")
@@ -38,7 +49,7 @@ export async function GET(request: Request) {
       .order("date"),
     supabase
       .from("gsc_query_daily")
-      .select("query, clicks, impressions, ctr, avg_position")
+      .select("date, query, clicks, impressions, avg_position")
       .eq("site_id", siteId)
       .gte("date", range.start)
       .lte("date", range.end),
@@ -51,8 +62,16 @@ export async function GET(request: Request) {
       .order("date", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from("gsc_index_status")
+      .select("date, indexed_count, not_indexed_count")
+      .eq("site_id", siteId)
+      .gte("date", range.start)
+      .lte("date", range.end)
+      .order("date"),
     readFreshness(supabase, "gsc"),
   ]);
+  timer.mark("db");
 
   const error = daily.error ?? queries.error;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -71,24 +90,29 @@ export async function GET(request: Request) {
 
   const byQuery = new Map<
     string,
-    { query: string; clicks: number; impressions: number; positionWeight: number }
+    {
+      query: string;
+      clicks: number;
+      impressions: number;
+      positionWeight: number;
+      days: Map<string, { clicks: number; impressions: number }>;
+    }
   >();
   for (const row of queries.data ?? []) {
     const key = normalizeQuery(row.query);
     if (!key) continue;
-    const existing = byQuery.get(key);
-    if (existing) {
-      existing.clicks += row.clicks;
-      existing.impressions += row.impressions;
-      existing.positionWeight += row.avg_position * row.impressions;
-    } else {
-      byQuery.set(key, {
-        query: row.query.trim(),
-        clicks: row.clicks,
-        impressions: row.impressions,
-        positionWeight: row.avg_position * row.impressions,
-      });
+    let entry = byQuery.get(key);
+    if (!entry) {
+      entry = { query: row.query.trim(), clicks: 0, impressions: 0, positionWeight: 0, days: new Map() };
+      byQuery.set(key, entry);
     }
+    entry.clicks += row.clicks;
+    entry.impressions += row.impressions;
+    entry.positionWeight += row.avg_position * row.impressions;
+    const day = entry.days.get(row.date) ?? { clicks: 0, impressions: 0 };
+    day.clicks += row.clicks;
+    day.impressions += row.impressions;
+    entry.days.set(row.date, day);
   }
 
   const ranked = [...byQuery.values()].sort(
@@ -103,28 +127,54 @@ export async function GET(request: Request) {
       impressions: row.impressions,
       ctr: row.impressions > 0 ? row.clicks / row.impressions : 0,
       avgPosition: row.impressions > 0 ? row.positionWeight / row.impressions : 0,
+      daily: [...row.days.entries()]
+        .map(([date, value]) => ({ date, ...value }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
     }),
   );
   const clicksInTable = topQueries.reduce((sum, row) => sum + row.clicks, 0);
 
-  return NextResponse.json({
-    range,
-    freshness,
-    totals: {
-      clicks,
-      impressions,
-      ctr: impressions > 0 ? clicks / impressions : 0,
-      avgPosition: weightedPosition,
-    },
-    series,
-    topQueries,
-    queryCoverage: { clicksInTable, clicksTotal: clicks },
-    indexStatus: indexStatus.data
-      ? {
-          observedOn: indexStatus.data.date,
-          indexed: indexStatus.data.indexed_count,
-          notIndexed: indexStatus.data.not_indexed_count,
-        }
-      : null,
+  const positionBands = POSITION_BANDS.map(({ band, min, max }) => {
+    const inBand = ranked.filter((row) => {
+      if (row.impressions <= 0) return false;
+      const position = row.positionWeight / row.impressions;
+      return position > min && position <= max;
+    });
+    return {
+      band,
+      queries: inBand.length,
+      clicks: inBand.reduce((sum, row) => sum + row.clicks, 0),
+      impressions: inBand.reduce((sum, row) => sum + row.impressions, 0),
+    };
   });
+
+  return readJson(
+    {
+      range,
+      freshness,
+      totals: {
+        clicks,
+        impressions,
+        ctr: impressions > 0 ? clicks / impressions : 0,
+        avgPosition: weightedPosition,
+      },
+      series,
+      topQueries,
+      queryCoverage: { clicksInTable, clicksTotal: clicks },
+      positionBands,
+      indexStatus: indexStatus.data
+        ? {
+            observedOn: indexStatus.data.date,
+            indexed: indexStatus.data.indexed_count,
+            notIndexed: indexStatus.data.not_indexed_count,
+          }
+        : null,
+      indexTrend: (indexTrend.data ?? []).map((row) => ({
+        date: row.date,
+        indexed: row.indexed_count,
+        notIndexed: row.not_indexed_count,
+      })),
+    },
+    timer,
+  );
 }

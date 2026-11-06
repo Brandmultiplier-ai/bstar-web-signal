@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { requireReader } from "@/lib/read/request";
+import { readJson, startTimer } from "@/lib/read/respond";
 
 export const dynamic = "force-dynamic";
+export const preferredRegion = "hnd1";
 
 /**
  * The site registry that drives the switcher. Only active sites are returned,
@@ -14,26 +16,32 @@ export const dynamic = "force-dynamic";
  * not something to hand to the browser.
  */
 export async function GET() {
+  const timer = startTimer();
   const auth = await requireReader();
   if (!auth.ok) return auth.response;
+  timer.mark("auth");
 
   const { data, error } = await auth.supabase
     .from("sites")
     .select("id, slug, domain, display_name, ga4_property_id, gsc_site_url, clarity_project_id")
     .eq("is_active", true)
     .order("sort_order");
+  timer.mark("db");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({
-    sites: (data ?? []).map((site) => ({
-      id: site.id,
-      slug: site.slug,
-      domain: site.domain,
-      displayName: site.display_name,
-      hasGa4: site.ga4_property_id !== null,
-      hasSearchConsole: site.gsc_site_url !== null,
-      hasClarity: site.clarity_project_id !== null,
-    })),
-  });
+  return readJson(
+    {
+      sites: (data ?? []).map((site) => ({
+        id: site.id,
+        slug: site.slug,
+        domain: site.domain,
+        displayName: site.display_name,
+        hasGa4: site.ga4_property_id !== null,
+        hasSearchConsole: site.gsc_site_url !== null,
+        hasClarity: site.clarity_project_id !== null,
+      })),
+    },
+    timer,
+  );
 }

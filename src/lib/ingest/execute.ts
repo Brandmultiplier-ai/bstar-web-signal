@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ingestWindow } from "@/lib/dates";
 import { SOURCE_INITIAL_LOOKBACK_DAYS, SOURCE_LOOKBACK_DAYS, type ScheduledSource } from "@/lib/sources";
 import { completeRun, failRun, openRun } from "@/lib/ingest/run";
+import { isTransient } from "@/lib/ingest/transient";
 import type { Ingestor, IngestResult } from "@/lib/ingest/types";
 import type { Site } from "@/lib/database.types";
 
@@ -32,7 +33,17 @@ export async function executeIngest(ingestor: Ingestor): Promise<ExecuteOutcome>
 
     if (error) throw new Error(`Could not load site registry: ${error.message}`);
 
-    const result = await ingestor.run({ admin, sites: (data ?? []) as Site[], window });
+    const context = { admin, sites: (data ?? []) as Site[], window };
+    let result: IngestResult;
+    try {
+      result = await ingestor.run(context);
+    } catch (error) {
+      // Every write is a keyed upsert, so a second attempt cannot duplicate
+      // rows. Clarity is not retried: its API allows 10 calls per project a day.
+      if (ingestor.source === "clarity" || !isTransient(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+      result = await ingestor.run(context);
+    }
     await completeRun(admin, run, result.rowsWritten, result.note);
 
     return { ok: true, source: ingestor.source, window, ...result };
@@ -45,6 +56,8 @@ export async function executeIngest(ingestor: Ingestor): Promise<ExecuteOutcome>
     };
   }
 }
+
+const RETRY_DELAY_MS = 5_000;
 
 async function resolveLookback(
   admin: ReturnType<typeof createAdminClient>,

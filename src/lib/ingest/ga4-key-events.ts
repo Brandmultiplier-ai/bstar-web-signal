@@ -1,71 +1,41 @@
-import { GA4_FORM_ID_DIMENSION, GA4_PLACEMENT_DIMENSION } from "@/lib/sources";
-import type { Ga4EventKey } from "@/lib/database.types";
+import { GA4_PLACEMENT_DIMENSION } from "@/lib/sources";
+import {
+  GA4_EVENT_RULES,
+  parameterName,
+  requiredCustomDimensions,
+  type Ga4EventRule,
+} from "@/lib/ga4-event-rules";
 
 const CORE_DIMENSIONS = ["date", "hostName", "eventName", "pagePath"] as const;
 
-export type KeyEventAttempt = {
-  dimensions: string[];
-  /** True when the report includes customEvent:form_id, so empty values can be dropped. */
-  formIdKnown: boolean;
-  hasPlacement: boolean;
-};
-
-const BOTH: KeyEventAttempt = {
-  dimensions: [...CORE_DIMENSIONS, GA4_FORM_ID_DIMENSION, GA4_PLACEMENT_DIMENSION],
-  formIdKnown: true,
-  hasPlacement: true,
-};
-
-const PLACEMENT_ONLY: KeyEventAttempt = {
-  dimensions: [...CORE_DIMENSIONS, GA4_PLACEMENT_DIMENSION],
-  formIdKnown: false,
-  hasPlacement: true,
-};
-
-const FORM_ID_ONLY: KeyEventAttempt = {
-  dimensions: [...CORE_DIMENSIONS, GA4_FORM_ID_DIMENSION],
-  formIdKnown: true,
-  hasPlacement: false,
-};
-
-const CORE_ONLY: KeyEventAttempt = {
-  dimensions: [...CORE_DIMENSIONS],
-  formIdKnown: false,
-  hasPlacement: false,
-};
-
-/** First request. Retries are chosen from the error. */
-export function firstKeyEventAttempt(): KeyEventAttempt {
-  return BOTH;
+/**
+ * date, host, event, page, then every custom dimension the rules table asks
+ * for, then placement. A new rule adds its dimension here without a pull edit.
+ */
+export function keyEventDimensionList(
+  rules: Record<string, Ga4EventRule> = GA4_EVENT_RULES,
+): string[] {
+  const dimensions = [...CORE_DIMENSIONS, ...requiredCustomDimensions(rules)];
+  if (!dimensions.includes(GA4_PLACEMENT_DIMENSION)) dimensions.push(GA4_PLACEMENT_DIMENSION);
+  return dimensions;
 }
 
 /**
- * An unregistered custom dimension fails the whole report. Retry without the
- * dimension the error names, so a missing form_id does not drop placement and
- * a missing placement does not drop the form_id filter.
+ * Drop the custom dimensions an unregistered-field error names. If the error
+ * names none, drop placement first so a rule dimension stays in the next try.
+ * Returns null when nothing custom is left to remove.
  */
-export function keyEventRetryPlan(error: unknown): KeyEventAttempt[] {
+export function shrinkKeyEventDimensions(current: string[], error: unknown): string[] | null {
   const message = error instanceof Error ? error.message : String(error);
-  const formId = message.includes("form_id");
-  const placement = message.includes("placement");
-  if (formId && !placement) return [PLACEMENT_ONLY, CORE_ONLY];
-  if (placement && !formId) return [FORM_ID_ONLY, CORE_ONLY];
-  return [PLACEMENT_ONLY, FORM_ID_ONLY, CORE_ONLY];
-}
+  const custom = current.filter((dimension) => dimension.startsWith("customEvent:"));
+  if (custom.length === 0) return null;
 
-export function dimensionIndex(attempt: KeyEventAttempt, name: string): number | null {
-  const index = attempt.dimensions.indexOf(name);
-  return index === -1 ? null : index;
-}
+  const named = custom.filter((dimension) => message.includes(parameterName(dimension)));
+  let drop: string[];
+  if (named.length > 0) drop = named;
+  else if (custom.includes(GA4_PLACEMENT_DIMENSION)) drop = [GA4_PLACEMENT_DIMENSION];
+  else drop = [custom[0]];
 
-/** A form_submit row counts only when form_id was sent. Other events always count. */
-export function countsKeyEvent(
-  eventKey: Ga4EventKey,
-  formId: string | null,
-  formIdKnown: boolean,
-): boolean {
-  if (eventKey !== "form_submission") return true;
-  if (!formIdKnown) return true;
-  const value = (formId ?? "").trim();
-  return value.length > 0 && value.toLowerCase() !== "(not set)";
+  const next = current.filter((dimension) => !drop.includes(dimension));
+  return next.length === current.length ? null : next;
 }

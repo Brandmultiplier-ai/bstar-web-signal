@@ -2,7 +2,12 @@ import type { IngestSource } from "@/lib/database.types";
 import { daysSince, formatRelative } from "@/lib/dates";
 import { SOURCE_CADENCE_DAYS } from "@/lib/sources";
 
-export type Freshness = { lastSuccessAt: string | null; lastErrorAt: string | null };
+export type Freshness = {
+  lastSuccessAt: string | null;
+  lastErrorAt: string | null;
+  /** Gate warning stored on the latest successful pull. Not a failure. */
+  note?: string | null;
+};
 
 export type FreshnessState = "fresh" | "failing" | "stale" | "never";
 

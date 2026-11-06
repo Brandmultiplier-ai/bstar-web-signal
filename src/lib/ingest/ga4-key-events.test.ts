@@ -1,56 +1,72 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { keyEventDimensionList, shrinkKeyEventDimensions } from "./ga4-key-events";
 import {
-  countsKeyEvent,
-  dimensionIndex,
-  firstKeyEventAttempt,
-  keyEventRetryPlan,
-} from "./ga4-key-events";
-import { GA4_FORM_ID_DIMENSION, GA4_PLACEMENT_DIMENSION } from "../sources";
+  GA4_EVENT_RULES,
+  gateEvent,
+  gateNote,
+  requiredCustomDimensions,
+  unappliedGates,
+} from "../ga4-event-rules";
+import { GA4_PLACEMENT_DIMENSION } from "../sources";
 
-describe("key event report", () => {
-  it("requests customEvent:form_id alongside placement", () => {
-    const attempt = firstKeyEventAttempt();
-    assert.equal(attempt.formIdKnown, true);
-    assert.deepEqual(attempt.dimensions.slice(0, 4), ["date", "hostName", "eventName", "pagePath"]);
-    assert.equal(dimensionIndex(attempt, GA4_FORM_ID_DIMENSION), 4);
-    assert.equal(dimensionIndex(attempt, GA4_PLACEMENT_DIMENSION), 5);
+describe("rules table drives the request", () => {
+  it("requests every custom dimension the rules table names", () => {
+    const dimensions = keyEventDimensionList();
+    assert.deepEqual(dimensions.slice(0, 4), ["date", "hostName", "eventName", "pagePath"]);
+    assert.ok(dimensions.includes("customEvent:form_id"));
+    assert.equal(dimensions.at(-1), GA4_PLACEMENT_DIMENSION);
+    assert.deepEqual(requiredCustomDimensions(), ["customEvent:form_id"]);
   });
 
-  it("drops form_id when GA4 says that dimension is not registered", () => {
-    const plan = keyEventRetryPlan(
+  it("adds a new rule's dimension without a pull change", () => {
+    const rules = {
+      ...GA4_EVENT_RULES,
+      quiz_complete: { requiredDimensions: ["quiz_id"] },
+    };
+    const dimensions = keyEventDimensionList(rules);
+    assert.ok(dimensions.includes("customEvent:quiz_id"));
+    assert.equal(gateEvent("quiz_complete", { quiz_id: "" }, dimensions, rules), "exclude");
+    assert.equal(gateEvent("quiz_complete", { quiz_id: "intro" }, dimensions, rules), "count");
+  });
+
+  it("drops an unregistered dimension and records that the gate was not applied", () => {
+    const first = keyEventDimensionList();
+    const next = shrinkKeyEventDimensions(
+      first,
       new Error("Field customEvent:form_id is not a valid dimension."),
     );
-    assert.equal(plan[0]?.formIdKnown, false);
-    assert.equal(plan[0]?.hasPlacement, true);
-    assert.equal(plan.at(-1)?.dimensions.includes(GA4_FORM_ID_DIMENSION), false);
-  });
-
-  it("keeps the form_id filter when placement is the dimension that failed", () => {
-    const plan = keyEventRetryPlan(new Error("Did you mean customEvent:placement?"));
-    assert.equal(plan[0]?.formIdKnown, true);
-    assert.equal(plan[0]?.hasPlacement, false);
+    assert.ok(next);
+    assert.equal(next?.includes("customEvent:form_id"), false);
+    assert.equal(next?.includes(GA4_PLACEMENT_DIMENSION), true);
+    const note = gateNote(unappliedGates(next ?? []), {});
+    assert.match(note ?? "", /form_submit gate was not applied/);
+    assert.match(note ?? "", /unfiltered/);
   });
 });
 
-describe("form_submit counting", () => {
-  it("counts form_submit only when form_id is set", () => {
-    assert.equal(countsKeyEvent("form_submission", "library_optin", true), true);
-    assert.equal(countsKeyEvent("form_submission", "", true), false);
-    assert.equal(countsKeyEvent("form_submission", "   ", true), false);
-    assert.equal(countsKeyEvent("form_submission", "(not set)", true), false);
-    assert.equal(countsKeyEvent("form_submission", "(Not Set)", true), false);
+describe("event gate", () => {
+  const dimensions = keyEventDimensionList();
+
+  it("lets an event with no rule through", () => {
+    assert.equal(gateEvent("gate_open", { form_id: "(not set)" }, dimensions), "count");
+    assert.equal(gateEvent("vsl_play", {}, dimensions), "count");
   });
 
-  it("does not filter other events, even when form_id is missing", () => {
-    assert.equal(countsKeyEvent("gate_open", "(not set)", true), true);
-    assert.equal(countsKeyEvent("vsl_play", null, true), true);
-    assert.equal(countsKeyEvent("calculator_completion", "", true), true);
-    assert.equal(countsKeyEvent("calendly_outbound_click", "(not set)", true), true);
+  it("drops form_submit when form_id is missing", () => {
+    assert.equal(gateEvent("form_submit", { form_id: "library_optin" }, dimensions), "count");
+    assert.equal(gateEvent("form_submit", { form_id: "" }, dimensions), "exclude");
+    assert.equal(gateEvent("form_submit", { form_id: "   " }, dimensions), "exclude");
+    assert.equal(gateEvent("form_submit", { form_id: "(not set)" }, dimensions), "exclude");
+    assert.equal(gateEvent("form_submit", { form_id: "(Not Set)" }, dimensions), "exclude");
   });
 
-  it("keeps form_submit when the form_id dimension could not be requested", () => {
-    assert.equal(countsKeyEvent("form_submission", "(not set)", false), true);
+  it("keeps form_submit and says so when form_id could not be requested", () => {
+    const without = dimensions.filter((name) => name !== "customEvent:form_id");
+    assert.equal(gateEvent("form_submit", { form_id: "(not set)" }, without), "unfiltered");
+    const note = gateNote({ form_submit: ["form_id"] }, { form_submit: 3 });
+    assert.match(note ?? "", /not applied/);
+    assert.match(note ?? "", /Excluded rows: form_submit 3/);
   });
 });

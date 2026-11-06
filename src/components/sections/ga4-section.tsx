@@ -47,7 +47,7 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
     <Panel
       title="Google Analytics"
       subtitle={`Stored traffic for ${site.domain}. Date chips re-read these tables — they never call Google.`}
-      note={SOURCE_WINDOW_NOTES.ga4}
+      note={[SOURCE_WINDOW_NOTES.ga4, data?.freshness.note].filter(Boolean).join(" ")}
       source="ga4"
       freshness={data?.freshness}
       icon={BarChart3}

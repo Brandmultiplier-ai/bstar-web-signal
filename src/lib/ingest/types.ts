@@ -16,6 +16,11 @@ export type IngestResult = {
   details?: Record<string, number>;
   /** Sites or projects skipped for missing config, surfaced for the same reason. */
   skipped?: string[];
+  /**
+   * Stored on the successful ingestion_runs row and shown on the GA4 panel.
+   * Used when an event gate could not be applied, and when rows were excluded.
+   */
+  note?: string | null;
 };
 
 export type Ingestor = {

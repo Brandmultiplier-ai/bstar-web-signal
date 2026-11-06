@@ -35,6 +35,7 @@ export async function completeRun(
   admin: Admin,
   run: RunHandle,
   rowsWritten: number,
+  note?: string | null,
 ): Promise<void> {
   await admin
     .from("ingestion_runs")
@@ -42,6 +43,9 @@ export async function completeRun(
       status: "success",
       finished_at: new Date().toISOString(),
       rows_written: rowsWritten,
+      // A success note is a gate warning, not a failed pull. Cleared when the
+      // next success has nothing to say.
+      error: note ? note.slice(0, 2000) : null,
     })
     .eq("id", run.id);
 }

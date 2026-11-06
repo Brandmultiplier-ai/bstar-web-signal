@@ -5,8 +5,10 @@ import { SOURCE_CADENCE_DAYS } from "@/lib/sources";
 export type Freshness = {
   lastSuccessAt: string | null;
   lastErrorAt: string | null;
-  /** Gate warning stored on the latest successful pull. Not a failure. */
+  /** Gate warning or a partial Clarity failure stored on the latest successful pull. */
   note?: string | null;
+  /** Text from the latest failed run. Shown when that failure is the newer event. */
+  failureMessage?: string | null;
 };
 
 export type FreshnessState = "fresh" | "failing" | "stale" | "never";
@@ -95,4 +97,17 @@ export function describeFreshness(
   }[state];
 
   return { state, message };
+}
+
+/**
+ * Extra sentence for the Clarity chip. A partial failure stays a success and
+ * names the domain. A newer total failure names every domain that failed.
+ */
+export function clarityStatusText(freshness?: Freshness): string | null {
+  if (!freshness) return null;
+  const failing =
+    Boolean(freshness.lastErrorAt) &&
+    (!freshness.lastSuccessAt || new Date(freshness.lastErrorAt as string) > new Date(freshness.lastSuccessAt));
+  if (failing) return freshness.failureMessage ?? null;
+  return freshness.note ?? null;
 }

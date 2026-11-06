@@ -1,9 +1,9 @@
-import { fetchClarityInsights, type ClarityDimension } from "@/lib/clients/clarity";
-import { foldClarityBreakdown, foldClarityPages, weightedRate } from "@/lib/clarity-pages";
+import { fetchClarityInsights } from "@/lib/clients/clarity";
+import { env } from "@/lib/env";
 import { addDays, todayUtc, toDateString } from "@/lib/dates";
+import { collectClarityProjects } from "@/lib/ingest/clarity-projects";
 import { upsertRows } from "@/lib/ingest/upsert";
 import type { Ingestor, IngestContext, IngestResult } from "@/lib/ingest/types";
-import type { ClarityBreakdownDaily, ClarityDaily, ClarityPageDaily, Site } from "@/lib/database.types";
 
 /**
  * Clarity ingestion.
@@ -14,157 +14,71 @@ import type { ClarityBreakdownDaily, ClarityDaily, ClarityPageDaily, Site } from
  * successful pulls the dashboard can show 10 or 20 stored days. Date chips
  * only filter those stored days — they never call Clarity live.
  *
- * Asking for `dimension1=URL` returns every metric per page, which is what
- * makes the shared project splittable per site: the hostname in each URL maps
- * back to a row in `sites`.
- *
- * Six calls per run (URL + Device + Browser + Source + Country + OS) stay
- * inside the 10-per-day project cap. Cron is daily so a missed day is a
- * missing stored day, not a rolling 3-day blob that would double-count.
+ * Each active project uses the token named in src/lib/clarity-tokens.ts.
+ * Six calls per project (URL + Device + Browser + Source + Country + OS)
+ * stay inside that project's own 10-per-day cap. A failed project is named
+ * on the run and does not stop the others.
  */
-
-/** Matches a Clarity URL host to a site, tolerating the www prefix. */
-function resolveSiteId(host: string, sites: Site[]): string | null {
-  const normalized = host.toLowerCase().replace(/^www\./, "");
-  return (
-    sites.find((site) => site.domain.toLowerCase().replace(/^www\./, "") === normalized)?.id ?? null
-  );
-}
 
 export const clarityIngestor: Ingestor = {
   source: "clarity",
   async run(ctx): Promise<IngestResult> {
-    // The project is shared, so metrics are keyed by project. Distinct because
-    // several site rows point at the same project.
-    const projectIds = [
-      ...new Set(
-        ctx.sites.map((site) => site.clarity_project_id).filter((id): id is string => !!id),
-      ),
-    ];
-    const skipped = ctx.sites.filter((site) => !site.clarity_project_id).map((site) => site.slug);
-
-    if (projectIds.length === 0) {
-      return { rowsWritten: 0, skipped };
-    }
-
-    const metrics = await fetchClarityInsights(1, ["URL"]);
-    const pages = foldClarityPages(metrics);
-
-    // One API token can only return one Clarity project. When the registry
-    // lists more than one, keep the project whose hostnames are actually in
-    // this response and skip the rest. A second project needs its own token.
-    let projectId = projectIds[0];
-    if (projectIds.length > 1) {
-      const sessionsByProject = new Map<string, number>();
-      for (const page of pages) {
-        const siteId = resolveSiteId(page.host, ctx.sites);
-        const site = ctx.sites.find((item) => item.id === siteId);
-        const id = site?.clarity_project_id;
-        if (!id) continue;
-        sessionsByProject.set(id, (sessionsByProject.get(id) ?? 0) + page.sessions);
-      }
-      const ranked = [...sessionsByProject.entries()].sort((a, b) => b[1] - a[1]);
-      if (ranked[0]) projectId = ranked[0][0];
-      for (const site of ctx.sites) {
-        if (site.clarity_project_id && site.clarity_project_id !== projectId) {
-          skipped.push(site.slug);
-        }
-      }
-    }
-
-    // One calendar day per pull. A 3-day aggregate stamped on yesterday would
-    // overlap the next pull and inflate All time if we summed stored days.
     const date = toDateString(addDays(todayUtc(), -1));
-
-    const pageRows: ClarityPageDaily[] = pages.map((page) => ({
-      clarity_project_id: projectId,
+    const collected = await collectClarityProjects({
+      sites: ctx.sites,
       date,
-      page_path: page.pagePath,
-      site_id: resolveSiteId(page.host, ctx.sites),
-      host: page.host,
-      sessions: page.sessions,
-      distinct_users: page.distinctUsers,
-      scroll_depth_pct: page.scrollDepthPct,
-      active_time_seconds: page.activeTimeSeconds,
-      total_time_seconds: page.totalTimeSeconds,
-      rage_click_pct: page.rageClickPct,
-      dead_click_pct: page.deadClickPct,
-      excessive_scroll_pct: page.excessiveScrollPct,
-      quick_back_pct: page.quickBackPct,
-      script_error_pct: page.scriptErrorPct,
-    }));
+      readEnv: (name) => env.clarityToken(name),
+      fetchInsights: (token, dimensions) => fetchClarityInsights(1, dimensions, token),
+    });
+    if (!collected.ok) throw new Error(collected.message ?? "Clarity failed.");
 
-    const pagesWritten = await upsertRows(
-      ctx.admin,
-      "clarity_page_daily",
-      pageRows,
-      "clarity_project_id,date,host,page_path",
-    );
+    let pagesWritten = 0;
+    let dailyWritten = 0;
+    let breakdownWritten = 0;
+    let matched = 0;
+    let unmatched = 0;
+    const writeFailed: string[] = [];
 
-    // Project-wide rollup. Session and user counts come straight from the
-    // undimensioned Traffic totals in the same response; the rates are
-    // recomputed from the page rows so they stay consistent with per-site view.
-    const projectRow: ClarityDaily = {
-      clarity_project_id: projectId,
-      date,
-      sessions: pages.reduce((sum, page) => sum + page.sessions, 0),
-      unique_users: pages.reduce((sum, page) => sum + page.distinctUsers, 0),
-      rage_click_pct: weightedRate(pages, (p) => p.rageClickPct),
-      dead_click_pct: weightedRate(pages, (p) => p.deadClickPct),
-      excessive_scroll_pct: weightedRate(pages, (p) => p.excessiveScrollPct),
-      quick_back_pct: weightedRate(pages, (p) => p.quickBackPct),
-      scroll_depth_pct: weightedRate(pages, (p) => p.scrollDepthPct),
-      active_time_seconds: weightedRate(pages, (p) => p.activeTimeSeconds),
-      script_error_pct: weightedRate(pages, (p) => p.scriptErrorPct),
-    };
-
-    const dailyWritten = await upsertRows(
-      ctx.admin,
-      "clarity_daily",
-      [projectRow],
-      "clarity_project_id,date",
-    );
-
-    // Extra dimension calls stay inside the 10/day cap
-    // (URL + Device + Browser + Source + Country + OS = 6).
-    const breakdowns: ClarityBreakdownDaily[] = [];
-    const extra: Array<{ dimension: ClarityBreakdownDaily["dimension"]; api: ClarityDimension }> = [
-      { dimension: "device", api: "Device" },
-      { dimension: "browser", api: "Browser" },
-      { dimension: "source", api: "Source" },
-      { dimension: "country", api: "Country" },
-      { dimension: "os", api: "OS" },
-    ];
-    for (const item of extra) {
+    for (const project of collected.projects) {
       try {
-        const extraMetrics = await fetchClarityInsights(1, [item.api]);
-        for (const row of foldClarityBreakdown(extraMetrics)) {
-          breakdowns.push({
-            clarity_project_id: projectId,
-            date,
-            dimension: item.dimension,
-            key: row.key,
-            sessions: row.sessions,
-            distinct_users: row.distinctUsers,
-          });
-        }
-      } catch (error) {
-        // A failed extra slice must not wipe the URL-level page data.
-        console.error(`Clarity ${item.dimension} breakdown skipped:`, error);
-      }
-    }
-
-    const breakdownWritten =
-      breakdowns.length === 0
-        ? 0
-        : await upsertRows(
+        pagesWritten += await upsertRows(
+          ctx.admin,
+          "clarity_page_daily",
+          project.pages,
+          "clarity_project_id,date,host,page_path",
+        );
+        dailyWritten += await upsertRows(
+          ctx.admin,
+          "clarity_daily",
+          [project.daily],
+          "clarity_project_id,date",
+        );
+        if (project.breakdowns.length > 0) {
+          breakdownWritten += await upsertRows(
             ctx.admin,
             "clarity_breakdown_daily",
-            breakdowns,
+            project.breakdowns,
             "clarity_project_id,date,dimension,key",
           );
+        }
+        matched += project.pages.filter((row) => row.site_id !== null).length;
+        unmatched += project.pages.filter((row) => row.site_id === null).length;
+      } catch {
+        console.error("[clarity] failed", project.domains.join(","));
+        writeFailed.push(...project.domains);
+      }
+    }
 
-    const matched = pageRows.filter((row) => row.site_id !== null).length;
+    if (collected.projects.length > 0 && writeFailed.length > 0 && pagesWritten + dailyWritten === 0) {
+      const message = [collected.note, `Clarity failed for ${writeFailed.join(", ")}.`]
+        .filter(Boolean)
+        .join(" ");
+      throw new Error(message);
+    }
+
+    const note = [collected.note, writeFailed.length > 0 ? `Clarity failed for ${writeFailed.join(", ")}.` : null]
+      .filter(Boolean)
+      .join(" ");
 
     return {
       rowsWritten: pagesWritten + dailyWritten + breakdownWritten,
@@ -173,9 +87,10 @@ export const clarityIngestor: Ingestor = {
         clarity_daily: dailyWritten,
         clarity_breakdown_daily: breakdownWritten,
         pages_matched_to_site: matched,
-        pages_unmatched_host: pageRows.length - matched,
+        pages_unmatched_host: unmatched,
       },
-      skipped,
+      skipped: collected.skipped,
+      note: note.length > 0 ? note : null,
     };
   },
 };

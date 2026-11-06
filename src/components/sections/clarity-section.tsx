@@ -21,6 +21,7 @@ import { TrendLine } from "@/website-signals-kit/components/charts/TrendLine";
 import type { SiteSummary } from "@/lib/api-types";
 import type { DateFilter } from "@/store/dashboard-store";
 import { partialCoverage } from "@/lib/format";
+import { clarityStatusText } from "@/lib/freshness";
 import { CLARITY_METRIC_DEFS, REPORT_BLURBS, SOURCE_WINDOW_NOTES } from "@/lib/summaries";
 
 /** Donut and bar charts draw at most this many rows. Coverage uses the same cut. */
@@ -64,7 +65,7 @@ export function ClaritySection({
           ? `Pages for ${site.domain}. Date chips re-read stored days — they do not call Clarity.`
           : "Shared project. Date changes read stored days only."
       }
-      note={SOURCE_WINDOW_NOTES.clarity}
+      note={[SOURCE_WINDOW_NOTES.clarity, clarityStatusText(data?.freshness)].filter(Boolean).join(" ")}
       source="clarity"
       freshness={data?.freshness}
       icon={MousePointerClick}

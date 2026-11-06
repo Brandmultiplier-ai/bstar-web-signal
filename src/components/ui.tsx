@@ -1,7 +1,7 @@
 "use client";
 
 import type { IngestSource } from "@/lib/database.types";
-import { describeFreshness, SOURCE_CHIP, type Freshness } from "@/lib/freshness";
+import { clarityStatusText, describeFreshness, SOURCE_CHIP, type Freshness } from "@/lib/freshness";
 import { SOURCE_CADENCE_DAYS, SOURCE_LABELS } from "@/lib/sources";
 import { CardInfoButton } from "@/website-signals-kit/components/CardInfoButton";
 
@@ -76,6 +76,7 @@ export function FreshnessBadge({
   freshness?: Freshness;
 }) {
   const { state, message } = describeFreshness(source, freshness);
+  const detail = source === "clarity" ? clarityStatusText(freshness) : null;
   const cadence = SOURCE_CADENCE_DAYS[source];
 
   // A null HTTP status is unknown and is not passed in here. Red is a failed
@@ -102,7 +103,7 @@ export function FreshnessBadge({
       />
       <span className="font-semibold text-white">{SOURCE_CHIP[source]}</span>
       <span className="text-[var(--nos-text-muted)]">·</span>
-      {message}
+      {detail ? `${message} ${detail}` : message}
     </span>
   );
 }

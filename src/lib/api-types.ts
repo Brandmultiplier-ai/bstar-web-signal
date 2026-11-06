@@ -3,8 +3,10 @@ import type { Ga4EventKey } from "@/lib/database.types";
 export type Freshness = {
   lastSuccessAt: string | null;
   lastErrorAt: string | null;
-  /** Present when the latest successful pull left a gate warning. */
+  /** Present when the latest successful pull left a gate warning or a partial failure. */
   note?: string | null;
+  /** Present when the latest failed run recorded which project failed. */
+  failureMessage?: string | null;
 };
 export type Range = { start: string; end: string };
 

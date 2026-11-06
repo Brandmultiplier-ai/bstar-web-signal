@@ -1,5 +1,3 @@
-import { env } from "@/lib/env";
-
 const LIVE_INSIGHTS_URL = "https://www.clarity.ms/export-data/api/v1/project-live-insights";
 
 /** Dimensions the live-insights endpoint accepts, up to three per call. */
@@ -25,8 +23,9 @@ export type ClarityMetric = {
  *    We persist each pull as yesterday and keep older rows, so the dashboard
  *    can show 10 or 20 stored days even though Microsoft never sends them
  *    in one call.
- *  - The project is capped at 10 requests per day. A run uses URL plus
- *    Device, Browser, Source, Country and OS — six calls, inside the cap.
+ *  - Each project is capped at 10 requests per day, and projects do not share
+ *    that cap. One pull uses URL plus Device, Browser, Source, Country and
+ *    OS — six calls for that project's own token.
  *
  * Passing `dimensions` breaks each metric down by those fields instead of
  * returning a single project-wide aggregate.
@@ -34,7 +33,10 @@ export type ClarityMetric = {
 export async function fetchClarityInsights(
   numOfDays: 1 | 2 | 3,
   dimensions: ClarityDimension[] = [],
+  token: string,
 ): Promise<ClarityMetric[]> {
+  if (!token.trim()) throw new Error("Clarity token is empty");
+
   const url = new URL(LIVE_INSIGHTS_URL);
   url.searchParams.set("numOfDays", String(numOfDays));
   dimensions.slice(0, 3).forEach((dimension, index) => {
@@ -42,15 +44,12 @@ export async function fetchClarityInsights(
   });
 
   const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${env.clarityApiToken()}` },
+    headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
 
   if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(
-      `Clarity API returned ${response.status} for numOfDays=${numOfDays}: ${body.slice(0, 300)}`,
-    );
+    throw new Error(`Clarity API returned ${response.status} for numOfDays=${numOfDays}`);
   }
 
   return (await response.json()) as ClarityMetric[];

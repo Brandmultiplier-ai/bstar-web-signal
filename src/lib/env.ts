@@ -25,5 +25,10 @@ export const env = {
   googleServiceAccountPrivateKey: () =>
     required("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY").replace(/\\n/g, "\n"),
   clarityApiToken: () => required("CLARITY_API_TOKEN"),
+  /** A missing or blank token is a skip for that project, not a failed run. */
+  clarityToken: (name: string) => {
+    const value = process.env[name]?.trim();
+    return value ? value : null;
+  },
   calendlyApiToken: () => required("CALENDLY_API_TOKEN"),
 };

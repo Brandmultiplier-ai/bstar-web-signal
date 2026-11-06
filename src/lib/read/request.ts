@@ -107,7 +107,12 @@ function deliveryFailures(supabase: ReaderClient): Promise<Map<IngestSource, str
 export async function readFreshness(
   supabase: ReaderClient,
   source: IngestSource,
-): Promise<{ lastSuccessAt: string | null; lastErrorAt: string | null; note: string | null }> {
+): Promise<{
+  lastSuccessAt: string | null;
+  lastErrorAt: string | null;
+  note: string | null;
+  failureMessage: string | null;
+}> {
   const [runs, delivery] = await Promise.all([
     supabase
       .from("ingestion_runs")
@@ -120,9 +125,11 @@ export async function readFreshness(
 
   const rows = runs.data ?? [];
   const success = rows.find((row) => row.status === "success");
+  const failure = rows.find((row) => row.status === "error");
   return {
     lastSuccessAt: success?.finished_at ?? null,
     note: success?.error ?? null,
+    failureMessage: failure?.error ?? null,
     lastErrorAt: latestIso([
       rows.find((row) => row.status === "error")?.finished_at,
       abandonedRunAt(rows[0]),

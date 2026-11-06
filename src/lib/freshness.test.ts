@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   abandonedRunAt,
+  clarityStatusText,
   deliveryFailureAt,
   describeFreshness,
   httpStatusIsFailure,
@@ -10,6 +11,32 @@ import {
 } from "./freshness";
 
 const hour = 60 * 60 * 1000;
+
+describe("clarity status text", () => {
+  it("names a partial failure without treating the successful project as failed", () => {
+    const freshness = {
+      lastSuccessAt: new Date().toISOString(),
+      lastErrorAt: null,
+      note: "Clarity failed for chrisrubincreativ.com.",
+    };
+    assert.equal(describeFreshness("clarity", freshness).state, "fresh");
+    assert.equal(clarityStatusText(freshness), "Clarity failed for chrisrubincreativ.com.");
+  });
+
+  it("uses the error text when every project failed", () => {
+    const freshness = {
+      lastSuccessAt: new Date(Date.now() - hour).toISOString(),
+      lastErrorAt: new Date().toISOString(),
+      note: "older success note",
+      failureMessage: "Clarity failed for brandmultiplier.ai, chrisrubincreativ.com.",
+    };
+    assert.equal(describeFreshness("clarity", freshness).state, "failing");
+    assert.equal(
+      clarityStatusText(freshness),
+      "Clarity failed for brandmultiplier.ai, chrisrubincreativ.com.",
+    );
+  });
+});
 
 describe("describeFreshness", () => {
   it("keeps a recent success fresh", () => {

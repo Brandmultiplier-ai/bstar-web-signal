@@ -93,10 +93,81 @@ export type GscResponse = {
     impressions: number;
     ctr: number;
     avgPosition: number;
+    daily: Array<{ date: string; clicks: number; impressions: number }>;
   }>;
   /** Clicks represented by the query table versus clicks on the daily totals. */
   queryCoverage: { clicksInTable: number; clicksTotal: number };
+  positionBands: Array<{ band: string; queries: number; clicks: number; impressions: number }>;
   indexStatus: { observedOn: string; indexed: number; notIndexed: number } | null;
+  indexTrend: Array<{ date: string; indexed: number; notIndexed: number }>;
+};
+
+export type SummarySection = "ga4" | "gsc" | "clarity" | "calendly" | "leads";
+
+export type SummaryKpi = {
+  id: string;
+  label: string;
+  section: SummarySection;
+  format: "number" | "percent" | "position";
+  goodWhen: "up" | "down";
+} & (
+  | { available: true; current: number; previous: number | null; change: number | null }
+  | { available: false; reason: string }
+);
+
+export type Mover = { key: string; current: number; previous: number; difference: number };
+export type MoverSet = { risers: Mover[]; fallers: Mover[] };
+
+export type SummaryResponse = {
+  range: Range & { allTime?: boolean };
+  /** Null for an all-time range, which has no earlier window to compare with. */
+  previous: Range | null;
+  kpis: SummaryKpi[];
+  changed: { pages: MoverSet; queries: MoverSet; channels: MoverSet } | null;
+  freshness: { ga4: Freshness; gsc: Freshness; clarity: Freshness; calendly: Freshness; rb2b: Freshness };
+};
+
+type Unavailable = { available: false; reason: string };
+type Ranked = Array<{ name: string; value: number }>;
+
+export type LeadsResponse = {
+  range: Range;
+  companies:
+    | {
+        available: true;
+        totals: { visits: number; companies: number; unidentifiedVisits: number };
+        series: Array<{ date: string; visits: number }>;
+        companies: Array<{
+          company: string;
+          visits: number;
+          pages: string[];
+          titles: string[];
+          firstSeen: string;
+          lastSeen: string;
+        }>;
+        topPages: Ranked;
+        referrers: Ranked;
+      }
+    | Unavailable;
+  forms:
+    | {
+        available: true;
+        totals: { submissions: number };
+        series: Array<{ date: string; submissions: number }>;
+        byForm: Ranked;
+        byPage: Ranked;
+        bySource: Ranked;
+        recent: Array<{
+          at: string;
+          formId: string;
+          intent: string | null;
+          page: string;
+          source: string | null;
+          medium: string | null;
+          campaign: string | null;
+        }>;
+      }
+    | Unavailable;
 };
 
 export type ClarityResponse = {

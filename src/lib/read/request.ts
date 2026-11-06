@@ -11,7 +11,12 @@ import {
 } from "@/lib/dates";
 import { createServerSupabase } from "@/lib/supabase/server";
 import type { IngestSource } from "@/lib/database.types";
-import { abandonedRunAt, deliveryFailureAt, latestIso } from "@/lib/freshness";
+import {
+  deliveryFailureAt,
+  summarizeRuns,
+  type RunRow,
+  type SourceFreshness,
+} from "@/lib/freshness";
 import type { ReaderClient } from "@/lib/supabase/types";
 
 export type ReadRange = { start: string; end: string; allTime?: boolean };
@@ -49,14 +54,19 @@ export function rangeLengthDays(range: ReadRange): number {
 /**
  * Every read route runs as the signed-in user so RLS applies. Returns a 401
  * response instead of a client when there is no session.
+ *
+ * getClaims verifies the JWT signature locally against the project's
+ * published ES256 key, so a read does not wait on a round trip to Supabase
+ * Auth. An expired access token is refreshed here, and the new cookies are
+ * written on this response, because middleware no longer runs on these routes.
  */
 export async function requireReader(): Promise<
   { ok: true; supabase: ReaderClient } | { ok: false; response: NextResponse }
 > {
   const supabase = await createServerSupabase();
-  const { data, error } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getClaims();
 
-  if (error || !data.user) {
+  if (error || !data?.claims?.sub) {
     return { ok: false, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
 
@@ -98,6 +108,58 @@ function deliveryFailures(supabase: ReaderClient): Promise<Map<IngestSource, str
   return pending;
 }
 
+const FRESHNESS_SOURCES: IngestSource[] = ["ga4", "gsc", "clarity", "calendly", "rb2b"];
+/** Several months of runs for every source. A source with no success in it gets one targeted read. */
+const RECENT_RUNS = 400;
+
+const freshnessByClient = new WeakMap<ReaderClient, Promise<Record<IngestSource, SourceFreshness>>>();
+
+/**
+ * Every source's freshness from one ingestion_runs read and one delivery RPC,
+ * shared by every readFreshness call on the same request.
+ */
+export function readAllFreshness(
+  supabase: ReaderClient,
+): Promise<Record<IngestSource, SourceFreshness>> {
+  const cached = freshnessByClient.get(supabase);
+  if (cached) return cached;
+
+  const pending = (async () => {
+    const [runs, delivery] = await Promise.all([
+      supabase
+        .from("ingestion_runs")
+        .select("source, status, started_at, finished_at, error")
+        .in("source", FRESHNESS_SOURCES)
+        .order("started_at", { ascending: false })
+        .limit(RECENT_RUNS),
+      deliveryFailures(supabase),
+    ]);
+
+    const rows = (runs.data ?? []) as RunRow[];
+    const result = {} as Record<IngestSource, SourceFreshness>;
+    await Promise.all(
+      FRESHNESS_SOURCES.map(async (source) => {
+        let sourceRows = rows.filter((row) => row.source === source);
+        if (!sourceRows.some((row) => row.status === "success")) {
+          const older = await supabase
+            .from("ingestion_runs")
+            .select("source, status, started_at, finished_at, error")
+            .eq("source", source)
+            .eq("status", "success")
+            .order("started_at", { ascending: false })
+            .limit(1);
+          sourceRows = [...sourceRows, ...((older.data ?? []) as RunRow[])];
+        }
+        result[source] = summarizeRuns(sourceRows, delivery.get(source));
+      }),
+    );
+    return result;
+  })();
+
+  freshnessByClient.set(supabase, pending);
+  return pending;
+}
+
 /**
  * When a source's data was last fetched successfully, and when the latest
  * attempt failed. A cron/HTTP failure, an ingestion error, or a run left
@@ -107,35 +169,8 @@ function deliveryFailures(supabase: ReaderClient): Promise<Map<IngestSource, str
 export async function readFreshness(
   supabase: ReaderClient,
   source: IngestSource,
-): Promise<{
-  lastSuccessAt: string | null;
-  lastErrorAt: string | null;
-  note: string | null;
-  failureMessage: string | null;
-}> {
-  const [runs, delivery] = await Promise.all([
-    supabase
-      .from("ingestion_runs")
-      .select("status, started_at, finished_at, error")
-      .eq("source", source)
-      .order("started_at", { ascending: false })
-      .limit(200),
-    deliveryFailures(supabase),
-  ]);
-
-  const rows = runs.data ?? [];
-  const success = rows.find((row) => row.status === "success");
-  const failure = rows.find((row) => row.status === "error");
-  return {
-    lastSuccessAt: success?.finished_at ?? null,
-    note: success?.error ?? null,
-    failureMessage: failure?.error ?? null,
-    lastErrorAt: latestIso([
-      rows.find((row) => row.status === "error")?.finished_at,
-      abandonedRunAt(rows[0]),
-      delivery.get(source),
-    ]),
-  };
+): Promise<SourceFreshness> {
+  return (await readAllFreshness(supabase))[source];
 }
 
 export function requireSiteId(url: URL): string | null {

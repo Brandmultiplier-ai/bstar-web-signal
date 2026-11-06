@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
 
 import {
-  classifyBookings,
   inCountedRange,
   isAttributionGap,
   isHeadline,
   type ClassifiedBooking,
   type ConversionClass,
 } from "@/lib/calendly-taxonomy";
+import { readClassifiedBookings } from "@/lib/read/calendly";
 import { parseRange, readFreshness, requireReader } from "@/lib/read/request";
+import { readJson, startTimer } from "@/lib/read/respond";
 
 export const dynamic = "force-dynamic";
+export const preferredRegion = "hnd1";
 
 const UNATTRIBUTED = "(none)";
 
@@ -24,22 +26,25 @@ function countClass(rows: ClassifiedBooking[], conversionClass: ConversionClass)
  * a reschedule counts once on the original creation date.
  */
 export async function GET(request: Request) {
+  const timer = startTimer();
   const auth = await requireReader();
   if (!auth.ok) return auth.response;
+  timer.mark("auth");
 
   const range = parseRange(new URL(request.url));
   const { supabase } = auth;
 
   const [bookings, freshness] = await Promise.all([
-    supabase.from("calendly_bookings").select("*"),
+    readClassifiedBookings(supabase),
     readFreshness(supabase, "calendly"),
   ]);
+  timer.mark("db");
 
   if (bookings.error) {
-    return NextResponse.json({ error: bookings.error.message }, { status: 500 });
+    return NextResponse.json({ error: bookings.error }, { status: 500 });
   }
 
-  const inRange = classifyBookings(bookings.data ?? []).filter(
+  const inRange = bookings.rows.filter(
     (row) => !row.superseded && inCountedRange(row, range.start, range.end),
   );
 
@@ -120,7 +125,7 @@ export async function GET(request: Request) {
     utmTerm: row.utm_term,
   });
 
-  return NextResponse.json({
+  return readJson({
     range,
     freshness,
     totals: {
@@ -142,5 +147,5 @@ export async function GET(request: Request) {
     bookings: [...headline, ...cancelled]
       .sort((a, b) => b.countedOn.localeCompare(a.countedOn))
       .map(toList),
-  });
+  }, timer);
 }

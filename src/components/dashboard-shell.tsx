@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
+  Building2,
   CalendarDays,
+  Gauge,
   LayoutDashboard,
   LogOut,
   MousePointerClick,
@@ -13,7 +15,7 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { useSites, useWebsiteSignals } from "@/lib/hooks";
+import { prefetchView, useSites, useSummary, type ReportView } from "@/lib/hooks";
 import {
   RANGE_PRESETS,
   dateFilterFromStore,
@@ -30,10 +32,12 @@ import { GscSection } from "@/components/sections/gsc-section";
 import { ClaritySection } from "@/components/sections/clarity-section";
 import { CalendlySection } from "@/components/sections/calendly-section";
 import { WebsiteSignalsSection } from "@/components/sections/website-signals-section";
+import { SummarySection } from "@/components/sections/summary-section";
+import { LeadsSection } from "@/components/sections/leads-section";
 import { describeFreshness, PanelSkeleton, type FreshnessState } from "@/components/ui";
-import type { SiteSummary } from "@/lib/api-types";
+import type { SiteSummary, SummaryResponse } from "@/lib/api-types";
 
-type View = "signals" | "ga4" | "gsc" | "clarity" | "calendly";
+type View = ReportView;
 
 const VIEWS: Array<{
   id: View;
@@ -41,12 +45,17 @@ const VIEWS: Array<{
   hint: string;
   icon: typeof LayoutDashboard;
 }> = [
-  { id: "signals", label: "Overview", hint: "Snapshot", icon: LayoutDashboard },
+  { id: "summary", label: "Business summary", hint: "All sources at a glance", icon: Gauge },
+  { id: "signals", label: "Traffic snapshot", hint: "Website signals", icon: LayoutDashboard },
   { id: "ga4", label: "Analytics", hint: "Google Analytics", icon: BarChart3 },
   { id: "gsc", label: "Search", hint: "Search Console", icon: Search },
   { id: "clarity", label: "Behavior", hint: "Microsoft Clarity", icon: MousePointerClick },
   { id: "calendly", label: "Conversions", hint: "Calendly", icon: CalendarDays },
+  { id: "leads", label: "Leads", hint: "RB2B and forms", icon: Building2 },
 ];
+
+/** Reports read most often after the summary, warmed once a site is chosen. */
+const WARM_VIEWS: View[] = ["ga4", "gsc"];
 
 export function DashboardShell() {
   const { data: sites, isLoading, error } = useSites();
@@ -59,7 +68,8 @@ export function DashboardShell() {
     customEnd,
   } = useDashboardStore();
   const range = dateFilterFromStore({ rangeDays, allTime, customStart, customEnd });
-  const [view, setView] = useState<View>("signals");
+  const [view, setView] = useState<View>("summary");
+  const queryClient = useQueryClient();
 
   const selectedSite = useMemo(() => {
     if (!sites?.length) return undefined;
@@ -71,6 +81,23 @@ export function DashboardShell() {
       setSelectedSiteSlug(selectedSite.slug);
     }
   }, [selectedSite, selectedSiteSlug, setSelectedSiteSlug]);
+
+  const siteId = selectedSite?.id;
+  const rangeKey = JSON.stringify(range);
+  useEffect(() => {
+    if (!siteId) return;
+    // After the visible report has had its turn, warm the next likely tabs.
+    const timer = setTimeout(() => {
+      for (const next of WARM_VIEWS) prefetchView(queryClient, next, siteId, JSON.parse(rangeKey));
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [queryClient, siteId, rangeKey]);
+
+  const warm = (next: View) => prefetchView(queryClient, next, siteId, range);
+  const warmSite = (slug: string) => {
+    const next = sites?.find((site) => site.slug === slug);
+    if (next) prefetchView(queryClient, view, next.id, range);
+  };
 
   if (isLoading) {
     return (
@@ -116,7 +143,10 @@ export function DashboardShell() {
             <span className="text-label-caps">Property</span>
             <select
               value={selectedSite?.slug ?? ""}
-              onChange={(event) => setSelectedSiteSlug(event.target.value)}
+              onChange={(event) => {
+                warmSite(event.target.value);
+                setSelectedSiteSlug(event.target.value);
+              }}
               className="mt-2 w-full rounded-xl border border-[var(--border)] bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--nos-accent)]"
             >
               {sites.map((site) => (
@@ -143,6 +173,8 @@ export function DashboardShell() {
               <button
                 key={item.id}
                 onClick={() => setView(item.id)}
+                onMouseEnter={() => warm(item.id)}
+                onFocus={() => warm(item.id)}
                 className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors ${
                   active ? "nos-card !p-3" : "hover:bg-white/5"
                 }`}
@@ -203,7 +235,10 @@ export function DashboardShell() {
           {sites.length > 1 ? (
             <select
               value={selectedSite?.slug ?? ""}
-              onChange={(event) => setSelectedSiteSlug(event.target.value)}
+              onChange={(event) => {
+                warmSite(event.target.value);
+                setSelectedSiteSlug(event.target.value);
+              }}
               className="shrink-0 rounded-xl border border-[var(--border)] bg-white/5 px-3 py-2 text-xs text-white outline-none"
             >
               {sites.map((site) => (
@@ -217,6 +252,7 @@ export function DashboardShell() {
             <button
               key={item.id}
               onClick={() => setView(item.id)}
+              onTouchStart={() => warm(item.id)}
               className={`shrink-0 rounded-xl px-3 py-2 text-xs transition-colors ${
                 view === item.id
                   ? "font-bold text-white"
@@ -233,6 +269,17 @@ export function DashboardShell() {
 
         <div className="mx-auto w-full max-w-[1600px] flex-1 px-6 pb-12">
           {selectedSite && <PullAlert site={selectedSite} range={range} />}
+          {view === "summary" && selectedSite && (
+            <SummarySection
+              site={selectedSite}
+              range={range}
+              onOpen={(section) => setView(section)}
+              onHover={(section) => warm(section)}
+            />
+          )}
+
+          {view === "leads" && selectedSite && <LeadsSection site={selectedSite} range={range} />}
+
           {view === "signals" && selectedSite && (
             <WebsiteSignalsSection site={selectedSite} range={range} />
           )}
@@ -354,7 +401,7 @@ const PULL_ROWS: Array<{
   { label: "Calendly", source: "calendly", show: () => true },
 ];
 
-function pullRows(site: SiteSummary, freshness: NonNullable<ReturnType<typeof useWebsiteSignals>["data"]>["freshness"]) {
+function pullRows(site: SiteSummary, freshness: SummaryResponse["freshness"]) {
   return PULL_ROWS.filter((row) => row.show(site)).map((row) => {
     const described = describeFreshness(row.source, freshness[row.source]);
     return { ...row, ...described };
@@ -362,7 +409,7 @@ function pullRows(site: SiteSummary, freshness: NonNullable<ReturnType<typeof us
 }
 
 function FreshnessCard({ site, range }: { site: SiteSummary; range: DateFilter }) {
-  const { data } = useWebsiteSignals(site.id, range);
+  const { data } = useSummary(site.id, range);
   if (!data) return null;
   const rows = pullRows(site, data.freshness);
 
@@ -390,7 +437,7 @@ function FreshnessCard({ site, range }: { site: SiteSummary; range: DateFilter }
 }
 
 function PullAlert({ site, range }: { site: SiteSummary; range: DateFilter }) {
-  const { data } = useWebsiteSignals(site.id, range);
+  const { data } = useSummary(site.id, range);
   if (!data) return null;
   const problems = pullRows(site, data.freshness).filter((row) => row.state !== "fresh");
   if (problems.length === 0) return null;
@@ -415,7 +462,7 @@ function PullAlert({ site, range }: { site: SiteSummary; range: DateFilter }) {
 function stateWord(state: FreshnessState): string {
   if (state === "failing") return "Failed";
   if (state === "stale") return "Overdue";
-  if (state === "never") return "Never";
+  if (state === "never") return "No pull yet";
   return "Fresh";
 }
 

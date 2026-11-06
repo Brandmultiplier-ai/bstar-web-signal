@@ -2,16 +2,20 @@ import { NextResponse } from "next/server";
 
 import { GA4_KEY_EVENTS } from "@/lib/sources";
 import { parseRange, readFreshness, requireReader, requireSiteId } from "@/lib/read/request";
+import { readJson, startTimer } from "@/lib/read/respond";
 import type { Ga4EventKey } from "@/lib/database.types";
 
 export const dynamic = "force-dynamic";
+export const preferredRegion = "hnd1";
 
 const TOP_N = 12;
 
 /** Reads stored GA4 data only. Never touches the GA4 API. */
 export async function GET(request: Request) {
+  const timer = startTimer();
   const auth = await requireReader();
   if (!auth.ok) return auth.response;
+  timer.mark("auth");
 
   const url = new URL(request.url);
   const siteId = requireSiteId(url);
@@ -81,6 +85,7 @@ export async function GET(request: Request) {
         .lte("date", range.end),
       readFreshness(supabase, "ga4"),
     ]);
+  timer.mark("db");
 
   const error =
     daily.error ??
@@ -173,7 +178,7 @@ export async function GET(request: Request) {
     };
   });
 
-  return NextResponse.json({
+  return readJson({
     range,
     freshness,
     totals: {
@@ -215,7 +220,7 @@ export async function GET(request: Request) {
     landingPages: landingPages.filter((row) => row.page_path !== "(not set)"),
     topSources,
     keyEvents: events,
-  });
+  }, timer);
 }
 
 function sum<T>(rows: T[], value: (row: T) => number): number {

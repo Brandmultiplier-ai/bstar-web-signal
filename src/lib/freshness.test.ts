@@ -7,10 +7,40 @@ import {
   deliveryFailureAt,
   describeFreshness,
   httpStatusIsFailure,
+  summarizeRuns,
   type DeliveryStatus,
 } from "./freshness";
 
 const hour = 60 * 60 * 1000;
+
+describe("summarizeRuns", () => {
+  const now = Date.parse("2026-11-07T00:00:00Z");
+
+  it("reads the latest success, note, and failure from one batch", () => {
+    const result = summarizeRuns(
+      [
+        { source: "clarity", status: "error", started_at: "2026-11-06T05:00:00Z", finished_at: "2026-11-06T05:01:00Z", error: "Clarity failed for a.com." },
+        { source: "clarity", status: "success", started_at: "2026-11-05T05:00:00Z", finished_at: "2026-11-05T05:01:00Z", error: "note" },
+      ],
+      null,
+      now,
+    );
+    assert.equal(result.lastSuccessAt, "2026-11-05T05:01:00Z");
+    assert.equal(result.note, "note");
+    assert.equal(result.failureMessage, "Clarity failed for a.com.");
+    assert.equal(result.lastErrorAt, "2026-11-06T05:01:00Z");
+  });
+
+  it("counts an abandoned run and a delivery failure", () => {
+    const result = summarizeRuns(
+      [{ source: "ga4", status: "running", started_at: "2026-11-06T23:00:00Z", finished_at: null, error: null }],
+      "2026-11-06T06:00:00Z",
+      now,
+    );
+    assert.equal(result.lastSuccessAt, null);
+    assert.equal(result.lastErrorAt, "2026-11-06T23:00:00Z");
+  });
+});
 
 describe("clarity status text", () => {
   it("names a partial failure without treating the successful project as failed", () => {

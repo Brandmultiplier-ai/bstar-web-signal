@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Search } from "lucide-react";
 
 import { useGsc } from "@/lib/hooks";
@@ -7,6 +8,7 @@ import {
   InsightCard,
   Panel,
   QueryState,
+  RankList,
   SimpleTable,
   Stat,
   StatGrid,
@@ -22,11 +24,14 @@ import { REPORT_BLURBS, SOURCE_WINDOW_NOTES } from "@/lib/summaries";
 const SERVICE_ACCOUNT = "n8n-analytics-ga4@bstar-ga4-analytics.iam.gserviceaccount.com";
 
 export function GscSection({ site, range }: { site: SiteSummary; range: DateFilter }) {
-  const { data, isLoading, error } = useGsc(site.id, range);
+  const { data, isLoading, isFetching, error } = useGsc(site.id, range);
   const empty = data && data.totals.clicks === 0 && data.totals.impressions === 0;
+  const [selectedQuery, setSelectedQuery] = useState<string | null>(null);
+  const queryDetail = data?.topQueries.find((row) => row.query === selectedQuery) ?? null;
 
   return (
     <Panel
+      refreshing={Boolean(data) && isFetching}
       title="Search Console"
       subtitle={`Organic search for ${site.domain}. Date changes re-read stored days — they never call Google.`}
       note={SOURCE_WINDOW_NOTES.gsc}
@@ -108,6 +113,38 @@ export function GscSection({ site, range }: { site: SiteSummary; range: DateFilt
                 />
               </StatGrid>
 
+              <div className="grid items-start gap-5 lg:grid-cols-5">
+                <div className="lg:col-span-3">
+                  {data.indexTrend.length > 1 ? (
+                    <HistogramBar
+                      data={data.indexTrend.map((row) => ({
+                        date: row.date,
+                        sessions: row.indexed,
+                        users: row.notIndexed,
+                      }))}
+                      title="Index coverage over time"
+                      subtitle="Snapshots stored in this range"
+                      names={{ sessions: "Indexed", users: "Not indexed" }}
+                    />
+                  ) : (
+                    <p className="text-xs text-[var(--nos-text-muted)]">
+                      {data.indexTrend.length === 1
+                        ? "One coverage snapshot in this range, so there is no trend yet."
+                        : "No coverage snapshots in this range."}
+                    </p>
+                  )}
+                </div>
+                <div className="lg:col-span-2">
+                  <RankList
+                    title="Clicks by ranking position"
+                    rows={data.positionBands.map((row) => ({
+                      name: `${row.band} · ${formatNumber(row.queries)} queries`,
+                      value: row.clicks,
+                    }))}
+                  />
+                </div>
+              </div>
+
               <div>
                 <h3 className="mb-2 text-xs font-medium text-[var(--nos-text-muted)]">
                   Queries, click-earning first
@@ -120,23 +157,56 @@ export function GscSection({ site, range }: { site: SiteSummary; range: DateFilt
                 <SimpleTable
                   rows={data.topQueries}
                   empty="No queries stored in this range."
+                  onRowClick={(row) => setSelectedQuery(row.query === selectedQuery ? null : row.query)}
+                  isSelected={(row) => row.query === selectedQuery}
                   columns={[
-                    { header: "Query", cell: (row) => row.query },
-                    { header: "Clicks", align: "right", cell: (row) => formatNumber(row.clicks) },
+                    { header: "Query", cell: (row) => row.query, sortValue: (row) => row.query },
+                    {
+                      header: "Clicks",
+                      align: "right",
+                      cell: (row) => formatNumber(row.clicks),
+                      sortValue: (row) => row.clicks,
+                    },
                     {
                       header: "Impr.",
                       align: "right",
                       cell: (row) => formatNumber(row.impressions),
+                      sortValue: (row) => row.impressions,
                     },
-                    { header: "CTR", align: "right", cell: (row) => formatPercent(row.ctr, 1) },
+                    {
+                      header: "CTR",
+                      align: "right",
+                      cell: (row) => formatPercent(row.ctr, 1),
+                      sortValue: (row) => row.ctr,
+                    },
                     {
                       header: "Position",
                       align: "right",
                       cell: (row) => row.avgPosition.toFixed(1),
+                      sortValue: (row) => row.avgPosition,
                     },
                   ]}
                 />
+                <p className="mt-2 text-[11px] text-[var(--nos-text-muted)]">
+                  Click a query to see its clicks and impressions day by day.
+                </p>
               </div>
+
+              {queryDetail && (
+                <div className="rounded-2xl border border-[var(--nos-accent-border)] p-4">
+                  <HistogramBar
+                    data={queryDetail.daily.map((row) => ({
+                      date: row.date,
+                      sessions: row.clicks,
+                      users: row.impressions,
+                    }))}
+                    title={`“${queryDetail.query}”`}
+                    subtitle={`${formatNumber(queryDetail.clicks)} clicks, ${formatNumber(queryDetail.impressions)} impressions, average position ${queryDetail.avgPosition.toFixed(1)}`}
+                    names={{ sessions: "Clicks", users: "Impressions" }}
+                    height={200}
+                  />
+                </div>
+              )}
             </>
           )}
         </div>

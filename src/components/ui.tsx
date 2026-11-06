@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo, useState } from "react";
+
 import type { IngestSource } from "@/lib/database.types";
 import { clarityStatusText, describeFreshness, SOURCE_CHIP, type Freshness } from "@/lib/freshness";
 import { SOURCE_CADENCE_DAYS, SOURCE_LABELS } from "@/lib/sources";
@@ -15,6 +17,7 @@ export function Panel({
   source,
   freshness,
   icon: Icon,
+  refreshing = false,
   children,
 }: {
   title: string;
@@ -23,10 +26,13 @@ export function Panel({
   source?: IngestSource;
   freshness?: Freshness;
   icon?: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  /** Previous data stays on screen, dimmed, while the new range or site loads. */
+  refreshing?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className="nos-card">
+    <section className="nos-card relative overflow-hidden" aria-busy={refreshing}>
+      {refreshing && <RefreshBar />}
       <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           {Icon && (
@@ -49,8 +55,21 @@ export function Panel({
         {source && <FreshnessBadge source={source} freshness={freshness} />}
       </header>
       {note && <DataNote>{note}</DataNote>}
-      {children}
+      <div className={refreshing ? "opacity-60 transition-opacity" : "transition-opacity"}>
+        {children}
+      </div>
     </section>
+  );
+}
+
+/** Thin bar on the top edge while a refetch runs behind visible data. */
+export function RefreshBar() {
+  return (
+    <span
+      aria-hidden
+      className="absolute inset-x-0 top-0 h-0.5 animate-pulse"
+      style={{ background: "var(--vui-gradient-brand)" }}
+    />
   );
 }
 
@@ -75,9 +94,26 @@ export function FreshnessBadge({
   source: IngestSource;
   freshness?: Freshness;
 }) {
+  const cadence = SOURCE_CADENCE_DAYS[source];
+
+  // No answer yet is not the same as "never pulled". Stay neutral until the
+  // API has said what the last pull was.
+  if (!freshness) {
+    return (
+      <span
+        className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-white/5 px-3 py-1.5 text-[11px] font-medium text-[var(--nos-text-muted)]"
+        aria-busy="true"
+      >
+        <span aria-hidden className="inline-block size-1.5 animate-pulse rounded-full bg-white/30" />
+        <span className="font-semibold text-white">{SOURCE_CHIP[source]}</span>
+        <span>·</span>
+        Checking…
+      </span>
+    );
+  }
+
   const { state, message } = describeFreshness(source, freshness);
   const detail = source === "clarity" ? clarityStatusText(freshness) : null;
-  const cadence = SOURCE_CADENCE_DAYS[source];
 
   // A null HTTP status is unknown and is not passed in here. Red is a failed
   // or abandoned ingest, a failed cron run, a present non-2xx status (all
@@ -149,15 +185,47 @@ export function Stat({
   );
 }
 
+export type TableColumn<T> = {
+  header: string;
+  cell: (row: T) => React.ReactNode;
+  align?: "right";
+  /** Makes the header a sort toggle. Nulls always sort last. */
+  sortValue?: (row: T) => number | string | null;
+};
+
 export function SimpleTable<T>({
   rows,
   columns,
   empty = "No data in this range.",
+  onRowClick,
+  isSelected,
 }: {
   rows: T[];
-  columns: Array<{ header: string; cell: (row: T) => React.ReactNode; align?: "right" }>;
+  columns: Array<TableColumn<T>>;
   empty?: string;
+  onRowClick?: (row: T) => void;
+  isSelected?: (row: T) => boolean;
 }) {
+  const [sort, setSort] = useState<{ header: string; descending: boolean } | null>(null);
+
+  const sorted = useMemo(() => {
+    const column = sort && columns.find((item) => item.header === sort.header);
+    if (!column?.sortValue) return rows;
+    const value = column.sortValue;
+    return [...rows].sort((a, b) => {
+      const left = value(a);
+      const right = value(b);
+      if (left === null && right === null) return 0;
+      if (left === null) return 1;
+      if (right === null) return -1;
+      const order =
+        typeof left === "number" && typeof right === "number"
+          ? left - right
+          : String(left).localeCompare(String(right));
+      return sort!.descending ? -order : order;
+    });
+  }, [rows, columns, sort]);
+
   if (rows.length === 0) {
     return <p className="text-sm text-[var(--nos-text-muted)]">{empty}</p>;
   }
@@ -167,23 +235,51 @@ export function SimpleTable<T>({
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left">
-            {columns.map((column) => (
-              <th
-                key={column.header}
-                className={`text-label-caps border-b border-[var(--border)] pb-3 pr-4 ${
-                  column.align === "right" ? "text-right" : ""
-                }`}
-              >
-                {column.header}
-              </th>
-            ))}
+            {columns.map((column) => {
+              const active = sort?.header === column.header;
+              return (
+                <th
+                  key={column.header}
+                  aria-sort={active ? (sort!.descending ? "descending" : "ascending") : undefined}
+                  className={`text-label-caps border-b border-[var(--border)] pb-3 pr-4 ${
+                    column.align === "right" ? "text-right" : ""
+                  }`}
+                >
+                  {column.sortValue ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSort(
+                          active
+                            ? { header: column.header, descending: !sort!.descending }
+                            : { header: column.header, descending: true },
+                        )
+                      }
+                      className={`inline-flex items-center gap-1 uppercase hover:text-white ${
+                        active ? "text-white" : ""
+                      }`}
+                    >
+                      {column.header}
+                      <span aria-hidden className="text-[9px]">
+                        {active ? (sort!.descending ? "▼" : "▲") : "↕"}
+                      </span>
+                    </button>
+                  ) : (
+                    column.header
+                  )}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => (
+          {sorted.map((row, index) => (
             <tr
               key={index}
-              className="border-b border-[var(--border)] transition-colors last:border-0 hover:bg-white/5"
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              className={`border-b border-[var(--border)] transition-colors last:border-0 hover:bg-white/5 ${
+                onRowClick ? "cursor-pointer" : ""
+              } ${isSelected?.(row) ? "bg-white/[0.07]" : ""}`}
             >
               {columns.map((column) => (
                 <td
@@ -203,6 +299,72 @@ export function SimpleTable<T>({
   );
 }
 
+/** Ranked names with a proportional bar. Labels are shown in full, unlike the path-shortening chart. */
+export function RankList({
+  title,
+  rows,
+  empty = "Nothing in this range.",
+  format = formatNumber,
+}: {
+  title: string;
+  rows: Array<{ name: string; value: number }>;
+  empty?: string;
+  format?: (value: number) => string;
+}) {
+  const max = Math.max(1, ...rows.map((row) => row.value));
+  return (
+    <div>
+      <h3 className="mb-3 text-xs font-medium text-[var(--nos-text-muted)]">{title}</h3>
+      {rows.length === 0 ? (
+        <p className="text-sm text-[var(--nos-text-muted)]">{empty}</p>
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((row) => (
+            <li key={row.name} className="text-xs">
+              <div className="mb-1 flex items-baseline justify-between gap-3">
+                <span className="truncate text-[var(--nos-text-secondary)]" title={row.name}>
+                  {row.name}
+                </span>
+                <span className="shrink-0 font-semibold tabular-nums text-white">{format(row.value)}</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-white/5">
+                <div
+                  className="h-1.5 rounded-full"
+                  style={{ width: `${(row.value / max) * 100}%`, background: "var(--vui-gradient-brand)" }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Change against the previous window. Green means better, whichever direction that is. */
+export function DeltaChip({
+  change,
+  goodWhen = "up",
+}: {
+  change: number | null;
+  goodWhen?: "up" | "down";
+}) {
+  if (change === null || !Number.isFinite(change)) {
+    return <span className="text-[11px] text-[var(--nos-text-muted)]">No earlier period to compare</span>;
+  }
+  const flat = Math.abs(change) < 0.005;
+  const better = flat ? null : (change > 0) === (goodWhen === "up");
+  const color =
+    better === null ? "var(--nos-text-muted)" : better ? "var(--nos-positive)" : "var(--nos-negative)";
+  const arrow = flat ? "→" : change > 0 ? "▲" : "▼";
+  return (
+    <span className="text-[11px] font-semibold tabular-nums" style={{ color }}>
+      {arrow} {flat ? "Flat" : `${Math.abs(change * 100).toFixed(change !== 0 && Math.abs(change) < 0.1 ? 1 : 0)}%`}
+      <span className="font-normal text-[var(--nos-text-muted)]"> vs previous period</span>
+    </span>
+  );
+}
+
 export function QueryState({ isLoading, error }: { isLoading: boolean; error: unknown }) {
   if (isLoading) {
     return <PanelSkeleton />;
@@ -214,54 +376,41 @@ export function QueryState({ isLoading, error }: { isLoading: boolean; error: un
   );
 }
 
-/** Branded pulse that fills the card instead of a tiny corner spinner. */
-export function PanelSkeleton() {
+const SKELETON_FILL = {
+  background:
+    "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(0,117,255,0.08) 50%, rgba(255,255,255,0.04) 100%)",
+  backgroundSize: "200% 100%",
+  border: "1px solid var(--border)",
+} as const;
+
+function Block({ className }: { className: string }) {
+  return <div className={`animate-pulse rounded-2xl ${className}`} style={SKELETON_FILL} />;
+}
+
+/**
+ * Same shape as the report it replaces: KPI tiles, a chart row, then a table.
+ * The layout does not jump when data arrives.
+ */
+export function PanelSkeleton({ tiles = 8, table = true }: { tiles?: number; table?: boolean }) {
   return (
     <div className="space-y-5" aria-busy="true" aria-label="Loading report">
-      <div className="flex flex-col items-center gap-3 py-4">
-        <span className="relative flex size-11 items-center justify-center">
-          <span
-            className="absolute inset-0 rounded-full"
-            style={{ border: "2px solid var(--nos-accent-border)" }}
-          />
-          <span
-            className="absolute inset-0 animate-spin rounded-full"
-            style={{
-              border: "2px solid transparent",
-              borderTopColor: "var(--nos-accent)",
-              borderRightColor: "var(--nos-accent-2)",
-            }}
-          />
-          <span
-            className="size-2 rounded-full"
-            style={{ background: "var(--vui-gradient-brand)" }}
-          />
-        </span>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--nos-text-muted)]">
-          Reading stored days
-        </span>
-      </div>
+      <Block className="h-[72px]" />
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {Array.from({ length: 8 }, (_, index) => (
-          <div
-            key={index}
-            className="h-[76px] animate-pulse rounded-2xl"
-            style={{
-              background: "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(0,117,255,0.08) 50%, rgba(255,255,255,0.04) 100%)",
-              backgroundSize: "200% 100%",
-              border: "1px solid var(--border)",
-            }}
-          />
+        {Array.from({ length: tiles }, (_, index) => (
+          <Block key={index} className="h-[76px]" />
         ))}
       </div>
-      <div
-        className="h-[220px] animate-pulse rounded-2xl"
-        style={{
-          background: "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(33,212,253,0.08) 50%, rgba(255,255,255,0.04) 100%)",
-          backgroundSize: "200% 100%",
-          border: "1px solid var(--border)",
-        }}
-      />
+      <div className="grid gap-5 lg:grid-cols-5">
+        <Block className="h-[220px] lg:col-span-3" />
+        <Block className="h-[220px] lg:col-span-2" />
+      </div>
+      {table && (
+        <div className="space-y-2">
+          {Array.from({ length: 5 }, (_, index) => (
+            <Block key={index} className="h-9" />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

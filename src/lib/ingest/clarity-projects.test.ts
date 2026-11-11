@@ -7,6 +7,7 @@ import { CLARITY_PULL_DIMENSIONS, collectClarityProjects } from "./clarity-proje
 
 const BM_TOKEN = "token-for-brandmultiplier";
 const CRC_TOKEN = "token-for-crc";
+const CHRIS_TOKEN = "token-for-chrisrubin";
 
 function site(domain: string, projectId: string | null): Site {
   return {
@@ -27,11 +28,13 @@ function site(domain: string, projectId: string | null): Site {
 
 const brandmultiplier = site("brandmultiplier.ai", "k0r7x8mkc7");
 const crc = site("chrisrubincreativ.com", "yv4cy3vjqc");
+const chrisrubin = site("chrisrubin.com", "zc0y67nz88");
 
 function tokens(overrides?: Record<string, string | null | undefined>) {
   const values: Record<string, string | null | undefined> = {
     CLARITY_API_TOKEN: BM_TOKEN,
     CLARITY_API_TOKEN_CRC: CRC_TOKEN,
+    CLARITY_API_TOKEN_CHRISRUBIN: CHRIS_TOKEN,
     ...overrides,
   };
   return (name: string) => values[name];
@@ -60,6 +63,38 @@ describe("clarity projects", () => {
       CLARITY_PULL_DIMENSIONS,
     );
     assert.equal(result.projects[0]?.projectId, "k0r7x8mkc7");
+  });
+
+  it("pulls chrisrubin.com with its own token and keeps www pages off chrisrubincreativ.com", async () => {
+    const result = await collectClarityProjects({
+      sites: [chrisrubin, crc],
+      date: "2026-11-10",
+      readEnv: tokens(),
+      fetchInsights: async (token, dimensions) => {
+        if (dimensions[0] !== "URL") return [];
+        const url =
+          token === CHRIS_TOKEN
+            ? "https://www.chrisrubin.com/about"
+            : "https://www.chrisrubincreativ.com/work";
+        return [
+          {
+            metricName: "Traffic",
+            information: [{ Url: url, totalSessionCount: 4, distinctUserCount: 2 }],
+          },
+        ];
+      },
+    });
+
+    const chris = result.projects.find((project) => project.projectId === "zc0y67nz88");
+    const creativ = result.projects.find((project) => project.projectId === "yv4cy3vjqc");
+    assert.equal(chris?.pages[0]?.host, "chrisrubin.com");
+    assert.equal(chris?.pages[0]?.page_path, "/about");
+    assert.equal(chris?.pages[0]?.site_id, "chrisrubin.com");
+    assert.equal(creativ?.pages[0]?.site_id, "chrisrubincreativ.com");
+    assert.equal(
+      chris?.pages.some((page) => page.site_id === "chrisrubincreativ.com"),
+      false,
+    );
   });
 
   it("skips a project whose token is empty or missing and names it", async () => {

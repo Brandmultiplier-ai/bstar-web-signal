@@ -36,7 +36,6 @@ export function CustomTooltip({
       className="min-w-[150px] px-4 py-3 text-xs"
       style={{
         background: "var(--vui-gradient-card)",
-        backdropFilter: "blur(120px)",
         border: "1px solid var(--nos-accent-border)",
         borderRadius: 16,
         boxShadow: "0 20px 27px rgba(0,0,0,0.5)",

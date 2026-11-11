@@ -132,7 +132,7 @@ function KpiTile({
       }}
       onMouseEnter={onHover}
       onFocus={onHover}
-      className="group flex h-full cursor-pointer flex-col justify-between gap-2 rounded-2xl border border-[var(--border)] bg-white/[0.04] px-4 py-3 text-left transition-colors hover:border-[var(--nos-accent-border)] hover:bg-white/[0.07]"
+      className="group flex h-full cursor-pointer flex-col justify-between gap-2 rounded-2xl border border-[var(--border)] bg-[var(--nos-bg-overlay)] px-4 py-3 text-left transition-colors hover:border-[var(--nos-accent-border)] hover:bg-[#1a2148]"
     >
       <span className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5">
@@ -186,7 +186,7 @@ const KPI_INFO: Record<string, string> = {
 function MoverCard({ title, set, onOpen }: { title: string; set: MoverSet; onOpen: () => void }) {
   const empty = set.risers.length === 0 && set.fallers.length === 0;
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-white/[0.03] p-4">
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--nos-bg-overlay)] p-4">
       <div className="mb-3 flex items-center justify-between">
         <p className="flex items-center gap-1.5">
           <span className="text-label-caps">{title}</span>

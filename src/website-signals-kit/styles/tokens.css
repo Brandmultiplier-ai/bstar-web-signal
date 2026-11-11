@@ -2,7 +2,7 @@
  * Vision UI Pro design tokens.
  *
  * Dark-only by design: the theme is built on a deep navy gradient canvas with
- * translucent glass cards, so there is no light variant to keep in sync.
+ * solid cards, so there is no light variant to keep in sync.
  *
  * The --nos-* names are the contract the kit components already read, so they
  * stay and are simply repointed at Vision UI values. The --vui-* names are the
@@ -26,7 +26,7 @@
 
   /* Surfaces. bg-canvas is a flat fallback; the gradient lives on <body>. */
   --nos-bg-canvas: #0b1437;
-  --nos-bg-surface: rgba(6, 11, 40, 0.94);
+  --nos-bg-surface: #060b28;
   --nos-bg-elevated: rgba(255, 255, 255, 0.06);
   --nos-bg-overlay: #0f1535;
 
@@ -51,8 +51,8 @@
   );
   --vui-gradient-card: linear-gradient(
     127.09deg,
-    rgba(6, 11, 40, 0.94) 19.41%,
-    rgba(10, 14, 35, 0.49) 76.65%
+    #060b28 19.41%,
+    #0a0e23 76.65%
   );
   --vui-gradient-brand: linear-gradient(310deg, #0075ff 0%, #21d4fd 100%);
   --vui-gradient-purple: linear-gradient(310deg, #582cff 0%, #7551ff 100%);
@@ -73,13 +73,9 @@
   --vui-series-6: #e31a1a;
 }
 
-/**
- * The glass panel that nearly every Vision UI surface is built from. The blur
- * is large and cheap because the backdrop is a static gradient, not content.
- */
+/** Solid panel. Nothing behind a card shows through it. */
 .nos-card {
   background: var(--vui-gradient-card);
-  backdrop-filter: blur(120px);
   border: 1px solid var(--border);
   border-radius: var(--vui-radius-card);
   padding: 20px 22px;

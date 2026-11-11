@@ -62,19 +62,20 @@ export function formatRelative(iso: string | null): string {
   return whole === 1 ? "1 day ago" : `${whole} days ago`;
 }
 
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
+/** British short months: Nov, not November. */
+export const SHORT_MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
   "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
 function ordinal(day: number): string {
@@ -83,11 +84,16 @@ function ordinal(day: number): string {
   return `${day}${suffix}`;
 }
 
-/** `2026-11-06` → `6th November 2026`. */
+/** `2026-11-06` → `6th Nov 2026`. */
 export function formatLongDate(date: string): string {
   const [year, month, day] = date.split("-").map(Number);
   if (!year || !month || !day) return date;
-  return `${ordinal(day)} ${MONTHS[month - 1]} ${year}`;
+  return `${ordinal(day)} ${SHORT_MONTHS[month - 1]} ${year}`;
+}
+
+/** `2026`, month index 10 → `Nov 2026`. */
+export function formatMonthYear(year: number, monthIndex: number): string {
+  return `${SHORT_MONTHS[monthIndex] ?? ""} ${year}`;
 }
 
 /** Floor used when the dashboard asks for every stored day. */

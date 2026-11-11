@@ -87,9 +87,9 @@ export function dateFilterWindow(filter: DateFilter): { start: string; end: stri
   };
 }
 
-/** `6th November 2026 to 10th November 2026`, or `All time`. */
+/** `6th Nov 2026 – 10th Nov 2026`, or `All time`. */
 export function dateFilterLabel(filter: DateFilter): string {
   const window = dateFilterWindow(filter);
   if (!window) return "All time";
-  return `${formatLongDate(window.start)} to ${formatLongDate(window.end)}`;
+  return `${formatLongDate(window.start)} – ${formatLongDate(window.end)}`;
 }

@@ -478,7 +478,6 @@ export const SeoTrafficGlobe = memo(function SeoTrafficGlobe({
             left: Math.min(tooltip.x + 12, 260),
             top: Math.max(tooltip.y - 72, 8),
             background: "var(--vui-gradient-card)",
-            backdropFilter: "blur(120px)",
             border: "1px solid var(--nos-accent-border)",
             boxShadow: "0 20px 27px rgba(0,0,0,0.55)",
             minWidth: 160,

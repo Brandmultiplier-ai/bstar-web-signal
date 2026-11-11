@@ -26,7 +26,7 @@ export function SummaryTrend({ data }: { data: SummaryResponse }) {
   const hasData = points.some((point) => point.current !== null);
 
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-white/[0.03] p-4">
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--nos-bg-overlay)] p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-sm font-bold text-white">
           Day by day
@@ -120,7 +120,7 @@ const TONE_COLOR: Record<SummaryInsight["tone"], string> = {
 
 export function InsightsCard({ insights }: { insights: SummaryInsight[] }) {
   return (
-    <div className="rounded-2xl border border-[var(--nos-accent-border)] bg-white/[0.03] p-4">
+    <div className="rounded-2xl border border-[var(--nos-accent-border)] bg-[var(--nos-bg-overlay)] p-4">
       <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-white">
         Insights
         <InfoEye

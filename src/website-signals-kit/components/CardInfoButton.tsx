@@ -97,7 +97,6 @@ export function CardInfoButton({ description }: CardInfoButtonProps) {
               zIndex: 9999,
               width: 264,
               background: "var(--vui-gradient-card)",
-              backdropFilter: "blur(120px)",
               border: "1px solid var(--nos-accent-border)",
               borderRadius: 16,
               padding: "12px 14px",

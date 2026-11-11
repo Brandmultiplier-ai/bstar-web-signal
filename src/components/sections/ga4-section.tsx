@@ -380,7 +380,7 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
                   .map((event) => (
                     <div
                       key={event.eventKey}
-                      className="rounded-2xl border border-[var(--border)] bg-white/[0.03] p-4"
+                      className="rounded-2xl border border-[var(--border)] bg-[var(--nos-bg-overlay)] p-4"
                     >
                       <p className="mb-3 flex items-baseline justify-between gap-3">
                         <span className="flex items-center gap-1.5 text-sm font-semibold text-white">

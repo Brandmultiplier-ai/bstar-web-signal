@@ -201,7 +201,7 @@ export function Stat({
 }) {
   const details = [tip ?? STAT_GLOSSARY[label] ?? label, hint].filter(Boolean) as string[];
   return (
-    <div className="flex h-full items-start justify-between gap-2 rounded-2xl border border-[var(--border)] bg-white/[0.04] px-4 py-3">
+    <div className="flex h-full items-start justify-between gap-2 rounded-2xl border border-[var(--border)] bg-[var(--nos-bg-overlay)] px-4 py-3">
       <div className="min-w-0">
         <p className="flex items-center gap-1.5 text-label-caps">
           <span className="whitespace-normal leading-snug">{label}</span>

@@ -30,7 +30,6 @@ export function SectionTLDR({ tldr }: SectionTLDRProps) {
         className="relative overflow-hidden p-5"
         style={{
           background: "var(--vui-gradient-card)",
-          backdropFilter: "blur(120px)",
           border: "1px solid var(--nos-accent-border)",
           borderRadius: "var(--vui-radius-card)",
         }}

@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 
-import { formatLongDate, latestCompleteDay } from "@/lib/dates";
+import { formatLongDate, formatMonthYear, latestCompleteDay } from "@/lib/dates";
 import {
-  RANGE_PRESETS,
   dateFilterFromStore,
   dateFilterLabel,
   dateFilterWindow,
@@ -42,13 +41,12 @@ function monthGrid({ year, month }: Month): Array<string | null> {
 }
 
 /**
- * The range reads as `6th November 2026 to 10th November 2026`. Clicking it
- * opens a calendar: the first click picks the start, the second picks the end
- * and applies the range straight away.
+ * The range reads as `6th Nov 2026 – 10th Nov 2026`. Clicking it opens a
+ * calendar of days only: the first click picks the start, the second picks
+ * the end and applies the range straight away.
  */
 export function DateRangePicker() {
-  const { rangeDays, allTime, customStart, customEnd, setRangeDays, setAllTime, setCustomRange } =
-    useDashboardStore();
+  const { rangeDays, allTime, customStart, customEnd, setCustomRange } = useDashboardStore();
   const filter = dateFilterFromStore({ rangeDays, allTime, customStart, customEnd });
   const current = dateFilterWindow(filter);
   const yesterday = latestCompleteDay();
@@ -104,15 +102,13 @@ export function DateRangePicker() {
     return current;
   }, [pendingStart, hovered, current]);
 
-  const presetActive = (days: number) => !customStart && !allTime && rangeDays === days;
-
   return (
     <div ref={rootRef} className="relative">
       <button
         type="button"
         onClick={openPicker}
         aria-expanded={open}
-        className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-white/5 px-4 py-2 text-sm font-semibold text-white transition-colors hover:border-[var(--nos-accent-border)]"
+        className="flex items-center gap-2 whitespace-nowrap rounded-full border border-[var(--border)] bg-white/5 px-4 py-2 text-sm font-semibold text-white transition-colors hover:border-[var(--nos-accent-border)]"
       >
         <CalendarDays size={15} className="text-[var(--nos-accent-2)]" />
         {dateFilterLabel(filter)}
@@ -122,102 +118,54 @@ export function DateRangePicker() {
         <div
           role="dialog"
           aria-label="Choose a date range"
-          className="absolute right-0 top-full z-40 mt-2 flex gap-4 rounded-2xl p-4"
+          className="absolute right-0 top-full z-40 mt-2 w-max rounded-2xl p-4"
           style={{
             background: "var(--vui-gradient-card)",
-            backdropFilter: "blur(120px)",
             border: "1px solid var(--nos-accent-border)",
             boxShadow: "0 20px 27px rgba(0,0,0,0.5)",
           }}
         >
-          <div className="flex w-32 shrink-0 flex-col gap-1 border-r border-[var(--border)] pr-3">
-            {RANGE_PRESETS.map((days) => (
-              <button
-                key={days}
-                type="button"
-                onClick={() => {
-                  setRangeDays(days);
-                  setOpen(false);
-                }}
-                className={`rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-white/10 ${
-                  presetActive(days) ? "bg-white/10 font-bold text-white" : "text-[var(--nos-text-secondary)]"
-                }`}
-              >
-                Last {days} days
-              </button>
-            ))}
+          <div className="mb-3 flex items-center justify-between gap-6">
             <button
               type="button"
-              onClick={() => {
-                setAllTime();
-                setOpen(false);
-              }}
-              className={`rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-white/10 ${
-                allTime && !customStart ? "bg-white/10 font-bold text-white" : "text-[var(--nos-text-secondary)]"
-              }`}
+              aria-label="Previous month"
+              onClick={() => setRightMonth((month) => shift(month, -1))}
+              className="rounded-full p-1 text-[var(--nos-text-secondary)] hover:bg-white/10 hover:text-white"
             >
-              All time
+              <ChevronLeft size={16} />
+            </button>
+            <p className="text-xs text-[var(--nos-text-secondary)]">
+              {pendingStart
+                ? `From ${formatLongDate(pendingStart)}. Now choose the end day.`
+                : "Choose a start day, then an end day."}
+            </p>
+            <button
+              type="button"
+              aria-label="Next month"
+              disabled={rightMonth.year * 12 + rightMonth.month >= lastMonth.year * 12 + lastMonth.month}
+              onClick={() => setRightMonth((month) => shift(month, 1))}
+              className="rounded-full p-1 text-[var(--nos-text-secondary)] hover:bg-white/10 hover:text-white disabled:opacity-30"
+            >
+              <ChevronRight size={16} />
             </button>
           </div>
-
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <button
-                type="button"
-                aria-label="Previous month"
-                onClick={() => setRightMonth((month) => shift(month, -1))}
-                className="rounded-full p-1 text-[var(--nos-text-secondary)] hover:bg-white/10 hover:text-white"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <p className="text-xs text-[var(--nos-text-secondary)]">
-                {pendingStart
-                  ? `From ${formatLongDate(pendingStart)}. Now pick the end date.`
-                  : "Pick a start date, then an end date."}
-              </p>
-              <button
-                type="button"
-                aria-label="Next month"
-                disabled={rightMonth.year * 12 + rightMonth.month >= lastMonth.year * 12 + lastMonth.month}
-                onClick={() => setRightMonth((month) => shift(month, 1))}
-                className="rounded-full p-1 text-[var(--nos-text-secondary)] hover:bg-white/10 hover:text-white disabled:opacity-30"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-            <div className="flex gap-6">
-              {[shift(rightMonth, -1), rightMonth].map((month) => (
-                <MonthView
-                  key={`${month.year}-${month.month}`}
-                  month={month}
-                  maxDate={yesterday}
-                  highlight={highlight}
-                  onPick={pick}
-                  onHover={setHovered}
-                />
-              ))}
-            </div>
+          <div className="flex items-start gap-10">
+            {[shift(rightMonth, -1), rightMonth].map((month) => (
+              <MonthView
+                key={`${month.year}-${month.month}`}
+                month={month}
+                maxDate={yesterday}
+                highlight={highlight}
+                onPick={pick}
+                onHover={setHovered}
+              />
+            ))}
           </div>
         </div>
       )}
     </div>
   );
 }
-
-const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
 
 function MonthView({
   month,
@@ -233,13 +181,13 @@ function MonthView({
   onHover: (date: string | null) => void;
 }) {
   return (
-    <div className="w-[224px]">
-      <p className="mb-2 text-center text-sm font-bold text-white">
-        {MONTH_NAMES[month.month]} {month.year}
+    <div className="w-[280px] shrink-0">
+      <p className="mb-2 text-center text-sm font-bold tracking-wide text-white">
+        {formatMonthYear(month.year, month.month)}
       </p>
-      <div className="grid grid-cols-7 gap-y-1 text-center">
+      <div className="grid grid-cols-7 gap-x-2 gap-y-1 text-center">
         {WEEKDAYS.map((day) => (
-          <span key={day} className="pb-1 text-[10px] font-semibold uppercase text-[var(--nos-text-muted)]">
+          <span key={day} className="pb-1 text-[11px] font-semibold tracking-wide text-[var(--nos-text-muted)]">
             {day}
           </span>
         ))}

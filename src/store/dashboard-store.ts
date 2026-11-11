@@ -11,7 +11,7 @@ import {
   toDateString,
 } from "@/lib/dates";
 
-export const RANGE_PRESETS = [7, 28, 90] as const;
+export const RANGE_PRESETS = [7, 30, 90] as const;
 export type RangePreset = (typeof RANGE_PRESETS)[number];
 
 export type DateFilter = {
@@ -38,7 +38,7 @@ export const useDashboardStore = create<DashboardState>()(
   persist(
     (set) => ({
       selectedSiteSlug: null,
-      rangeDays: 28,
+      rangeDays: 30,
       allTime: false,
       customStart: null,
       customEnd: null,
@@ -51,7 +51,18 @@ export const useDashboardStore = create<DashboardState>()(
         set({ allTime: false, customStart: clamped.start, customEnd: clamped.end });
       },
     }),
-    { name: "web-signals-ui" },
+    {
+      name: "web-signals-ui",
+      merge: (persisted, current) => {
+        const saved = persisted as Partial<DashboardState>;
+        const days = saved.rangeDays;
+        return {
+          ...current,
+          ...saved,
+          rangeDays: days === 7 || days === 30 || days === 90 ? days : 30,
+        };
+      },
+    },
   ),
 );
 
@@ -72,7 +83,7 @@ export function dateFilterFromStore(state: {
 export function dateFilterSearch(filter: DateFilter): string {
   if (filter.all) return "all=1";
   if (filter.start && filter.end) return `start=${filter.start}&end=${filter.end}`;
-  return `days=${filter.days ?? 28}`;
+  return `days=${filter.days ?? 30}`;
 }
 
 /** The window a filter covers, in `YYYY-MM-DD`. Null for All time. */
@@ -80,7 +91,7 @@ export function dateFilterWindow(filter: DateFilter): { start: string; end: stri
   if (filter.all) return null;
   if (filter.start && filter.end) return { start: filter.start, end: filter.end };
   const end = latestCompleteDay();
-  const days = filter.days ?? 28;
+  const days = filter.days ?? 30;
   return {
     start: toDateString(addDays(new Date(`${end}T00:00:00Z`), -(days - 1))),
     end,

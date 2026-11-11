@@ -5,6 +5,7 @@ import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { formatLongDate, formatMonthYear, latestCompleteDay } from "@/lib/dates";
 import {
+  RANGE_PRESETS,
   dateFilterFromStore,
   dateFilterLabel,
   dateFilterWindow,
@@ -46,7 +47,8 @@ function monthGrid({ year, month }: Month): Array<string | null> {
  * the end and applies the range straight away.
  */
 export function DateRangePicker() {
-  const { rangeDays, allTime, customStart, customEnd, setCustomRange } = useDashboardStore();
+  const { rangeDays, allTime, customStart, customEnd, setRangeDays, setCustomRange } =
+    useDashboardStore();
   const filter = dateFilterFromStore({ rangeDays, allTime, customStart, customEnd });
   const current = dateFilterWindow(filter);
   const yesterday = latestCompleteDay();
@@ -102,8 +104,30 @@ export function DateRangePicker() {
     return current;
   }, [pendingStart, hovered, current]);
 
+  const presetActive = (days: number) => !customStart && !allTime && rangeDays === days;
+
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative flex flex-wrap items-center justify-end gap-2">
+      <div className="flex items-center gap-1">
+        {RANGE_PRESETS.map((days) => (
+          <button
+            key={days}
+            type="button"
+            aria-pressed={presetActive(days)}
+            onClick={() => {
+              setRangeDays(days);
+              setOpen(false);
+            }}
+            className={`rounded-full border px-3 py-2 text-xs font-semibold transition-colors ${
+              presetActive(days)
+                ? "border-[var(--nos-accent-border)] bg-white/10 text-white"
+                : "border-[var(--border)] text-[var(--nos-text-secondary)] hover:border-[var(--nos-accent-border)] hover:text-white"
+            }`}
+          >
+            {days} days
+          </button>
+        ))}
+      </div>
       <button
         type="button"
         onClick={openPicker}

@@ -271,6 +271,16 @@ export type CalendlyResponse = {
   }>;
 };
 
+export type PageDetailResponse = Omit<import("@/lib/read/page-detail").PageDetail, "conversions"> & {
+  range: Range & { allTime?: boolean };
+  previous: Range | null;
+  path: string;
+  site: { domain: string; hasGa4: boolean; clarityProjectId: string | null };
+  /** Earliest stored day for the whole site, so a new site can say when collection began. */
+  firstStored: { ga4: string | null; clarity: string | null };
+  conversions: Array<{ eventKey: string; label: string; placement: string; count: number }>;
+};
+
 export type WebsiteSignalsResponse = {
   range: Range;
   /** The kit's own data contract; imported rather than restated. */

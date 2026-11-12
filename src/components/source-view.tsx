@@ -1,17 +1,19 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { prefetchPageDetail, useSourceDetail } from "@/lib/hooks";
+import { beginNavigation, useNavigationStore } from "@/store/navigation-store";
 import { formatLongDate } from "@/lib/dates";
 import { pageViewHref } from "@/lib/view-links";
 import { DetailShell, useDetailContext } from "@/components/detail-shell";
 import { DailyLines, Tile } from "@/components/page-detail-body";
 import { PagePath } from "@/components/page-path";
 import {
+  LoadingScrim,
   OpeningState,
-  RefreshBar,
   SimpleTable,
   SubHeading,
   formatDuration,
@@ -42,6 +44,11 @@ export function SourceView() {
   const { site, range, isLoading: sitesLoading, error: siteError } = useDetailContext();
   const { data, isLoading, isFetching, error } = useSourceDetail(site?.id, source, medium, range);
   const shown = data && data.source === source && data.medium === medium ? data : null;
+  const clearNavigation = useNavigationStore((state) => state.clear);
+
+  useEffect(() => {
+    if (shown || error || siteError || source === null || medium === null) clearNavigation();
+  }, [shown, error, siteError, source, medium, clearNavigation]);
 
   return (
     <DetailShell
@@ -50,8 +57,8 @@ export function SourceView() {
       error={source === null || medium === null ? "No source given. Open a source from the dashboard." : siteError}
     >
       {site && source !== null && medium !== null && (
-        <div className="space-y-8">
-          {isFetching && shown && <RefreshBar />}
+        <div className="relative space-y-8">
+          <div className={isFetching && shown ? "pointer-events-none space-y-8 blur-[2px]" : "space-y-8"}>
           {!shown ? (
             isLoading || isFetching ? (
               <OpeningState label="Loading this source" />
@@ -129,6 +136,7 @@ export function SourceView() {
                     onRowIntent={(row) => prefetchPageDetail(queryClient, site.id, row.path, range)}
                     onRowClick={(row) => {
                       prefetchPageDetail(queryClient, site.id, row.path, range);
+                      beginNavigation("Loading this page");
                       router.push(pageViewHref(site.slug, row.path, range));
                     }}
                     columns={[
@@ -166,6 +174,8 @@ export function SourceView() {
               </section>
             </>
           )}
+          </div>
+          {isFetching && shown && <LoadingScrim label="Updating" />}
         </div>
       )}
     </DetailShell>

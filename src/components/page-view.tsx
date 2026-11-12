@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { usePageDetail } from "@/lib/hooks";
@@ -9,7 +10,8 @@ import { PageLabelPill } from "@/components/page-path";
 import { PageBody, PageInsights, PageLinks, liveUrl } from "@/components/page-detail-body";
 import { PageIdentity } from "@/components/page-identity";
 import { PageRecordings } from "@/components/page-recordings";
-import { OpeningState, RefreshBar } from "@/components/ui";
+import { LoadingScrim, OpeningState } from "@/components/ui";
+import { useNavigationStore } from "@/store/navigation-store";
 
 /** Full, shareable view of one page: what it is, who sends people to it, and how they behave. */
 export function PageView() {
@@ -20,6 +22,11 @@ export function PageView() {
   const label = site && path ? pageLabel(site.slug, path) : null;
   const shown = data && data.path === path ? data : null;
   const title = shown?.meta?.title ?? label?.label ?? path ?? "Page";
+  const clearNavigation = useNavigationStore((state) => state.clear);
+
+  useEffect(() => {
+    if (shown || error || siteError || !path) clearNavigation();
+  }, [shown, error, siteError, path, clearNavigation]);
 
   return (
     <DetailShell
@@ -28,8 +35,8 @@ export function PageView() {
       error={!path ? "No page given. Open a page from the dashboard." : siteError}
     >
       {site && path && (
-        <div className="space-y-8">
-          {isFetching && shown && <RefreshBar />}
+        <div className="relative space-y-8">
+          <div className={isFetching && shown ? "pointer-events-none space-y-8 blur-[2px]" : "space-y-8"}>
           <div>
             <p className="text-label-caps">Page on {site.domain}</p>
             <h1 className="mt-1 text-[26px] font-bold leading-tight text-white">{title}</h1>
@@ -65,6 +72,8 @@ export function PageView() {
               <PageBody data={shown} siteId={site.id} siteSlug={site.slug} range={range} wide />
             </>
           )}
+          </div>
+          {isFetching && shown && <LoadingScrim label="Updating" />}
         </div>
       )}
     </DetailShell>

@@ -52,8 +52,9 @@ export function Panel({
         </div>
         {source && <FreshnessBadge source={source} freshness={freshness} />}
       </header>
-      <div className={refreshing ? "opacity-60 transition-opacity" : "transition-opacity"}>
-        {children}
+      <div className="relative">
+        <div className={refreshing ? "pointer-events-none blur-[2px]" : undefined}>{children}</div>
+        {refreshing && <LoadingScrim label="Updating" />}
       </div>
     </section>
   );
@@ -87,6 +88,37 @@ export function SubHeading({ title, info }: { title: string; info?: string | str
       {title}
       {info && <InfoEye text={info} />}
     </h3>
+  );
+}
+
+/** One ring. A single transform, so it stays cheap on a large page. */
+export function Spinner() {
+  return (
+    <span
+      aria-hidden
+      className="inline-block size-8 animate-spin rounded-full border-2 border-white/25 border-t-white"
+    />
+  );
+}
+
+/**
+ * Covers whatever is already on screen. The page underneath is blurred by the
+ * caller; this adds the dim layer and the spinner.
+ */
+export function LoadingScrim({ label, fixed = false }: { label: string; fixed?: boolean }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={
+        fixed
+          ? "fixed inset-0 z-[80] flex flex-col items-center justify-center gap-3 bg-black/50 backdrop-blur-sm"
+          : "absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-[inherit] bg-black/45"
+      }
+    >
+      <Spinner />
+      <p className="text-sm font-medium text-white">{label}</p>
+    </div>
   );
 }
 
@@ -423,7 +455,7 @@ export function DeltaChip({
 
 export function QueryState({ isLoading, error }: { isLoading: boolean; error: unknown }) {
   if (isLoading) {
-    return <PanelSkeleton />;
+    return <OpeningState label="Loading" />;
   }
   return (
     <p className="text-sm text-[var(--nos-negative)]">
@@ -443,12 +475,13 @@ function Block({ className }: { className: string }) {
   return <div className={`rounded-2xl ${className}`} style={SKELETON_FILL} />;
 }
 
-/** A still stand-in. No pulse: a large animated placeholder is what made opening feel laggy. */
+/** Centered spinner for a screen that has nothing to blur yet. */
 export function OpeningState({ label }: { label: string }) {
   return (
-    <p className="text-sm text-[var(--nos-text-secondary)]" aria-busy="true">
-      {label}
-    </p>
+    <div className="flex min-h-[280px] flex-col items-center justify-center gap-3" role="status" aria-busy="true">
+      <Spinner />
+      <p className="text-sm text-[var(--nos-text-secondary)]">{label}</p>
+    </div>
   );
 }
 

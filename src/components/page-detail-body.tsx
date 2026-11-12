@@ -17,6 +17,7 @@ import {
 import { formatLongDate } from "@/lib/dates";
 import { sourceLabel } from "@/lib/source-labels";
 import { prefetchSourceDetail } from "@/lib/hooks";
+import { beginNavigation } from "@/store/navigation-store";
 import { sourceViewHref } from "@/lib/view-links";
 import {
   DeltaChip,
@@ -281,7 +282,10 @@ function SourceList({
               href={sourceViewHref(siteSlug, row.source, row.medium, range)}
               onPointerEnter={() => warm(row)}
               onPointerDown={() => warm(row)}
-              onClick={onNavigate}
+              onClick={() => {
+                beginNavigation("Loading this source");
+                onNavigate?.();
+              }}
               className="group -mx-2 block rounded-xl px-2 py-2 hover:bg-white/5"
               title={label.explain}
             >

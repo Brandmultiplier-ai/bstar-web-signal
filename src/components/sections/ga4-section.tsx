@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { prefetchPageDetail, prefetchSourceDetail, useGa4 } from "@/lib/hooks";
+import { beginNavigation } from "@/store/navigation-store";
 import { sourceLabel } from "@/lib/source-labels";
 import { sourceViewHref } from "@/lib/view-links";
 import { usePageDrillStore } from "@/store/page-drill-store";
@@ -399,6 +400,7 @@ function Ga4DrillTables({
           onRowIntent={(row) => prefetchSourceDetail(queryClient, site.id, row.source, row.medium, range)}
           onRowClick={(row) => {
             prefetchSourceDetail(queryClient, site.id, row.source, row.medium, range);
+            beginNavigation("Loading this source");
             router.push(sourceViewHref(site.slug, row.source, row.medium, range));
           }}
           columns={[

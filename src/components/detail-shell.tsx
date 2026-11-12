@@ -18,6 +18,7 @@ import {
 import { DateRangePicker } from "@/components/date-range-picker";
 import { Breadcrumbs } from "@/components/vision";
 import { OpeningState } from "@/components/ui";
+import { beginNavigation } from "@/store/navigation-store";
 import type { SiteSummary } from "@/lib/api-types";
 
 /**
@@ -101,6 +102,7 @@ export function DetailShell({
         <div className="flex min-w-0 items-center gap-4">
           <Link
             href="/"
+            onClick={() => beginNavigation("Loading")}
             className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-white/5 px-3 py-2 text-xs text-[var(--nos-text-secondary)] hover:bg-white/10 hover:text-white"
           >
             <ArrowLeft size={14} /> Dashboard

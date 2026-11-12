@@ -1,7 +1,7 @@
 "use client";
 
-import { startTransition, useEffect, useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
   Building2,
@@ -14,7 +14,7 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { prefetchView, useSites, useSummary, type ReportView } from "@/lib/hooks";
+import { prefetchView, reportQueries, useSites, useSummary, type ReportView } from "@/lib/hooks";
 import { dateFilterFromStore, useDashboardStore, type DateFilter } from "@/store/dashboard-store";
 import { useDashboardViewStore } from "@/store/dashboard-view-store";
 import { createBrowserSupabase } from "@/lib/supabase/client";
@@ -28,7 +28,8 @@ import { WebsiteSignalsSection } from "@/components/sections/website-signals-sec
 import { SummarySection } from "@/components/sections/summary-section";
 import { LeadsSection } from "@/components/sections/leads-section";
 import { PageDrillDrawer } from "@/components/page-drill-drawer";
-import { describeFreshness, PanelSkeleton, type FreshnessState } from "@/components/ui";
+import { describeFreshness, LoadingScrim, OpeningState, type FreshnessState } from "@/components/ui";
+import { useNavigationStore } from "@/store/navigation-store";
 import type { SiteSummary, SummaryResponse } from "@/lib/api-types";
 
 type View = ReportView;
@@ -65,6 +66,11 @@ export function DashboardShell() {
   const view = useDashboardViewStore((state) => state.view);
   const setView = useDashboardViewStore((state) => state.setView);
   const queryClient = useQueryClient();
+  const clearNavigation = useNavigationStore((state) => state.clear);
+
+  useEffect(() => {
+    clearNavigation();
+  }, [clearNavigation]);
 
   const selectedSite = useMemo(() => {
     if (!sites?.length) return undefined;
@@ -78,6 +84,10 @@ export function DashboardShell() {
   }, [selectedSite, selectedSiteSlug, setSelectedSiteSlug]);
 
   const siteId = selectedSite?.id;
+  const incomingReady = useIncomingReady(view, siteId, range);
+  const [painted, setPainted] = useState<View>(view);
+  if (view !== painted && incomingReady) setPainted(view);
+  const switching = painted !== view;
   const rangeKey = JSON.stringify(range);
   useEffect(() => {
     if (!siteId) return;
@@ -99,7 +109,7 @@ export function DashboardShell() {
   if (isLoading) {
     return (
       <div className="p-6">
-        <PanelSkeleton />
+        <OpeningState label="Loading" />
       </div>
     );
   }
@@ -169,7 +179,7 @@ export function DashboardShell() {
             return (
               <button
                 key={item.id}
-                onClick={() => startTransition(() => setView(item.id))}
+                onClick={() => setView(item.id)}
                 onMouseEnter={() => warm(item.id)}
                 onFocus={() => warm(item.id)}
                 className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors ${
@@ -246,7 +256,7 @@ export function DashboardShell() {
           {VIEWS.map((item) => (
             <button
               key={item.id}
-              onClick={() => startTransition(() => setView(item.id))}
+              onClick={() => setView(item.id)}
               onTouchStart={() => warm(item.id)}
               className={`shrink-0 rounded-xl px-3 py-2 text-xs transition-colors ${
                 view === item.id
@@ -262,23 +272,24 @@ export function DashboardShell() {
           ))}
         </div>
 
-        <div className="mx-auto w-full max-w-[1600px] flex-1 px-6 pb-12">
-          {view === "summary" && selectedSite && (
+        <div className="relative mx-auto w-full max-w-[1600px] flex-1 px-6 pb-12">
+          <div className={switching ? "pointer-events-none blur-[2px]" : undefined}>
+          {painted === "summary" && selectedSite && (
             <SummarySection
               site={selectedSite}
               range={range}
-              onOpen={(section) => startTransition(() => setView(section))}
+              onOpen={(section) => setView(section)}
               onHover={(section) => warm(section)}
             />
           )}
 
-          {view === "leads" && selectedSite && <LeadsSection site={selectedSite} range={range} />}
+          {painted === "leads" && selectedSite && <LeadsSection site={selectedSite} range={range} />}
 
-          {view === "signals" && selectedSite && (
+          {painted === "signals" && selectedSite && (
             <WebsiteSignalsSection site={selectedSite} range={range} />
           )}
 
-          {view === "ga4" && selectedSite && (
+          {painted === "ga4" && selectedSite && (
             selectedSite.hasGa4 ? (
               <Ga4Section site={selectedSite} range={range} />
             ) : (
@@ -288,12 +299,14 @@ export function DashboardShell() {
             )
           )}
 
-          {view === "gsc" && selectedSite && (
+          {painted === "gsc" && selectedSite && (
             <GscSection site={selectedSite} range={range} />
           )}
 
-          {view === "clarity" && <ClaritySection site={selectedSite} range={range} />}
-          {view === "calendly" && <CalendlySection range={range} />}
+          {painted === "clarity" && <ClaritySection site={selectedSite} range={range} />}
+          {painted === "calendly" && <CalendlySection range={range} />}
+          </div>
+          {switching && <LoadingScrim label={`Opening ${activeView.label}`} />}
         </div>
       </div>
       {selectedSite && <PageDrillDrawer site={selectedSite} range={range} />}
@@ -345,6 +358,13 @@ function FreshnessCard({ site, range }: { site: SiteSummary; range: DateFilter }
       </div>
     </div>
   );
+}
+
+/** True once the report being opened has an answer, including an error. */
+function useIncomingReady(view: ReportView, siteId: string | undefined, range: DateFilter) {
+  const spec = view === "calendly" ? reportQueries.calendly(range) : reportQueries[view](siteId, range);
+  const query = useQuery(spec as Parameters<typeof useQuery>[0]);
+  return !query.isLoading;
 }
 
 function stateWord(state: FreshnessState): string {

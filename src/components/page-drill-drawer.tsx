@@ -11,7 +11,8 @@ import { pageViewHref } from "@/lib/view-links";
 import { PageLabelPill } from "@/components/page-path";
 import { PageBody, PageInsights, PageLinks } from "@/components/page-detail-body";
 import { PageIdentity } from "@/components/page-identity";
-import { OpeningState, RefreshBar } from "@/components/ui";
+import { LoadingScrim, OpeningState } from "@/components/ui";
+import { beginNavigation } from "@/store/navigation-store";
 import type { SiteSummary } from "@/lib/api-types";
 import type { DateFilter } from "@/store/dashboard-store";
 
@@ -53,7 +54,7 @@ export function PageDrillDrawer({ site, range }: { site: SiteSummary; range: Dat
         aria-label="Close page details"
         tabIndex={-1}
         onClick={close}
-        className="absolute inset-0 bg-black/60"
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
       />
       <aside
         role="dialog"
@@ -61,7 +62,6 @@ export function PageDrillDrawer({ site, range }: { site: SiteSummary; range: Dat
         aria-label={`Page details for ${path}`}
         className="relative flex h-full w-full max-w-[620px] flex-col overflow-y-auto border-l border-[var(--border)] bg-[var(--nos-bg-surface)] shadow-2xl"
       >
-        {isFetching && shown && <RefreshBar />}
         <header className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--nos-bg-surface)] px-6 py-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -87,7 +87,10 @@ export function PageDrillDrawer({ site, range }: { site: SiteSummary; range: Dat
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href={pageViewHref(site.slug, path, range)}
-              onClick={close}
+              onClick={() => {
+                beginNavigation("Loading this page");
+                close();
+              }}
               className="mt-3 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white"
               style={{ background: "var(--vui-gradient-brand)" }}
             >
@@ -97,7 +100,7 @@ export function PageDrillDrawer({ site, range }: { site: SiteSummary; range: Dat
           </div>
         </header>
 
-        <div className="space-y-7 px-6 py-5">
+        <div className="relative space-y-7 px-6 py-5">
           {!shown ? (
             isLoading || isFetching ? (
               <OpeningState label="Loading this page" />
@@ -107,12 +110,15 @@ export function PageDrillDrawer({ site, range }: { site: SiteSummary; range: Dat
               </p>
             )
           ) : (
-            <>
-              <PageIdentity data={shown} siteSlug={site.slug} />
-              <PageInsights insights={shown.insights} />
-              <PageBody data={shown} siteId={site.id} siteSlug={site.slug} range={range} onNavigate={close} />
-            </>
+            <div className={isFetching ? "pointer-events-none blur-[2px]" : undefined}>
+              <div className="space-y-7">
+                <PageIdentity data={shown} siteSlug={site.slug} />
+                <PageInsights insights={shown.insights} />
+                <PageBody data={shown} siteId={site.id} siteSlug={site.slug} range={range} onNavigate={close} />
+              </div>
+            </div>
           )}
+          {shown && isFetching && <LoadingScrim label="Updating" />}
         </div>
       </aside>
     </div>

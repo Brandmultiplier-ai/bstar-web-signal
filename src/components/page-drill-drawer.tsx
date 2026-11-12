@@ -10,6 +10,7 @@ import { pageLabel } from "@/lib/page-labels";
 import { pageViewHref } from "@/lib/view-links";
 import { PageLabelPill } from "@/components/page-path";
 import { PageBody, PageInsights, PageLinks } from "@/components/page-detail-body";
+import { PageIdentity } from "@/components/page-identity";
 import { OpeningState, RefreshBar } from "@/components/ui";
 import type { SiteSummary } from "@/lib/api-types";
 import type { DateFilter } from "@/store/dashboard-store";
@@ -107,6 +108,7 @@ export function PageDrillDrawer({ site, range }: { site: SiteSummary; range: Dat
             )
           ) : (
             <>
+              <PageIdentity data={shown} siteSlug={site.slug} />
               <PageInsights insights={shown.insights} />
               <PageBody data={shown} siteId={site.id} siteSlug={site.slug} range={range} onNavigate={close} />
             </>

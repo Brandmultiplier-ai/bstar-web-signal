@@ -63,7 +63,7 @@ export function LoginForm() {
 
     // Only relative paths, so a crafted `next` cannot bounce us off-site.
     const next = searchParams.get("next");
-    const destination = next?.startsWith("/") ? next : "/";
+    const destination = next?.startsWith("/") && !/^\/[/\\]/.test(next) ? next : "/";
     // Refresh so middleware re-runs with the session cookie now set.
     router.replace(destination);
     router.refresh();

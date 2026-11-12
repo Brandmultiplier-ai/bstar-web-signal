@@ -279,6 +279,23 @@ export type PageDetailResponse = Omit<import("@/lib/read/page-detail").PageDetai
   /** Earliest stored day for the whole site, so a new site can say when collection began. */
   firstStored: { ga4: string | null; clarity: string | null };
   conversions: Array<{ eventKey: string; label: string; placement: string; count: number }>;
+  insights: import("@/lib/read/page-insights").PageInsight[];
+  meta: import("@/lib/read/page-context").PageMetaView | null;
+  /** Why `meta` is null. */
+  metaReason: string | null;
+  recordings:
+    | { available: true; total: number; rows: import("@/lib/read/page-context").RecordingView[] }
+    | { available: false; reason: string };
+};
+
+export type SourceDetailResponse = import("@/lib/read/source-detail").SourceDetail & {
+  range: Range & { allTime?: boolean };
+  previous: Range | null;
+  source: string;
+  medium: string;
+  site: { domain: string };
+  /** First day landing pages per source were stored for this site. */
+  landingsSince: string | null;
 };
 
 export type WebsiteSignalsResponse = {

@@ -4,21 +4,16 @@ import { GA4_KEY_EVENTS } from "@/lib/sources";
 import { previousWindow, type Window } from "@/lib/read/compare";
 import { readCompanyVisits, readFormCaptures } from "@/lib/read/leads";
 import { buildPageDetail } from "@/lib/read/page-detail";
+import { buildPageInsights } from "@/lib/read/page-insights";
+import { readPageMeta, readPageRecordings } from "@/lib/read/page-context";
 import { parseRange, requireReader, requireSiteId } from "@/lib/read/request";
-import { readJson, startTimer } from "@/lib/read/respond";
+import { missingRelation, readJson, startTimer } from "@/lib/read/respond";
 import type { Ga4EventKey } from "@/lib/database.types";
 
 export const dynamic = "force-dynamic";
 export const preferredRegion = "hnd1";
 
 const MAX_PATH_LENGTH = 2048;
-
-/** Until migration 0022 is applied the sources table does not exist; that is "not collected yet", not an error. */
-function missingRelation(error: { message: string; code?: string } | null): boolean {
-  return Boolean(
-    error && (error.code === "42P01" || /could not find the table|schema cache|does not exist/i.test(error.message)),
-  );
-}
 
 /** One page of one site, from stored GA4, Clarity, form and RB2B rows. Never calls an external API. */
 export async function GET(request: Request) {
@@ -50,7 +45,7 @@ export async function GET(request: Request) {
   if (!site.data) return NextResponse.json({ error: "Unknown siteId" }, { status: 404 });
   const { domain, ga4_property_id, clarity_project_id, rb2b_enabled } = site.data;
 
-  const [ga4, landings, clarity, keyEvents, sources, anySources, firstGa4, firstClarity, forms, visits] = await Promise.all([
+  const [ga4, landings, clarity, keyEvents, sources, anySources, firstGa4, firstClarity, forms, visits, meta, recordings] = await Promise.all([
     supabase
       .from("ga4_page_daily")
       .select("date, pageviews, sessions, users, engaged_sessions, bounce_rate, avg_session_duration")
@@ -105,6 +100,8 @@ export async function GET(request: Request) {
     rb2b_enabled
       ? readCompanyVisits(supabase, siteId, current.start, current.end)
       : Promise.resolve({ available: false as const, reason: "RB2B is not enabled for this site." }),
+    readPageMeta(supabase, siteId, path),
+    readPageRecordings(supabase, siteId, path, current, clarity_project_id !== null),
   ]);
   timer.mark("db");
 
@@ -148,6 +145,14 @@ export async function GET(request: Request) {
         clarity: firstClarity.data?.[0]?.date ?? null,
       },
       ...detail,
+      insights: buildPageInsights(detail),
+      meta: meta.available ? meta.meta : null,
+      metaReason: meta.available
+        ? meta.meta
+          ? null
+          : "This page has not been read yet. Titles and descriptions are read once a day for each site's most viewed pages."
+        : meta.reason,
+      recordings,
       conversions: detail.conversions.map((row) => ({
         ...row,
         label: GA4_KEY_EVENTS[row.eventKey as Ga4EventKey]?.label ?? row.eventKey,

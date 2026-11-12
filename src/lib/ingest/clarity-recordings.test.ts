@@ -110,6 +110,40 @@ describe("parseRecordings", () => {
     assert.deepEqual(row.visited_paths, ["/", "/about"]);
   });
 
+  it("reads the response Clarity actually returns", () => {
+    const { rows } = parseRecordings(
+      [
+        {
+          link: "https://clarity.microsoft.com/player/k0r7x8mkc7/abc/def",
+          timestamp: "2026-11-11 21:01:47",
+          totalDuration: "01 minute and 38 seconds",
+          activeDuration: "01 minute and 20 seconds",
+          pagesCount: 2,
+          sessionClickCount: 4,
+          timeline: [
+            {
+              url: "https://brandmultiplier.ai/encharge-click-detection?utm_source=encharge",
+              referrerUrl: "https://mail.google.com/",
+              duration: "20 seconds",
+            },
+            { url: "https://www.brandmultiplier.ai/pricing/", referrerUrl: "", duration: "01 minute" },
+          ],
+        },
+      ],
+      context,
+    );
+    const row = rows[0]!;
+    assert.equal(row.recording_url, "https://clarity.microsoft.com/player/k0r7x8mkc7/abc/def");
+    assert.equal(row.started_at, "2026-11-11T21:01:47.000Z");
+    assert.equal(row.duration_seconds, 98);
+    assert.equal(row.page_count, 2);
+    assert.equal(row.click_count, 4);
+    assert.equal(row.entry_url, "https://brandmultiplier.ai/encharge-click-detection?utm_source=encharge");
+    assert.equal(row.referrer, "https://mail.google.com/");
+    assert.deepEqual(row.visited_paths, ["/encharge-click-detection", "/pricing"]);
+    assert.equal(row.site_id, "id-brandmultiplier.ai");
+  });
+
   it("reads an hh:mm:ss duration", () => {
     const { rows } = parseRecordings([{ sessionId: "s", duration: "00:02:05" }], context);
     assert.equal(rows[0]!.duration_seconds, 125);

@@ -30,7 +30,12 @@ export function PageIdentity({ data, siteSlug }: { data: PageDetailResponse; sit
         )}
         {meta ? (
           <>
-            {(meta.description || meta.title) && (
+            {meta.statusCode === 404 && (
+              <p className="leading-relaxed text-white">
+                This address is not a page on the site. Opening it shows the not-found page. It stays in these reports because links still point here, and visits to it are still counted.
+              </p>
+            )}
+            {meta.statusCode !== 404 && (meta.description || meta.title) && (
               <div>
                 <p className="text-label-caps">The page describes itself as</p>
                 <p className="mt-1 leading-relaxed text-white">
@@ -44,7 +49,7 @@ export function PageIdentity({ data, siteSlug }: { data: PageDetailResponse; sit
                 <p className="mt-1 text-[var(--nos-text-secondary)]">{heading}</p>
               </div>
             )}
-            {!meta.description && !meta.title && !meta.error && (
+            {meta.statusCode !== 404 && !meta.description && !meta.title && !meta.error && (
               <p className="text-[var(--nos-text-secondary)]">
                 The page loaded but has no title, description or heading. Pages like this are often redirects or tracking steps rather than content.
               </p>
@@ -54,7 +59,7 @@ export function PageIdentity({ data, siteSlug }: { data: PageDetailResponse; sit
                 Opening this address ends up at <span className="break-all text-white">{redirected}</span>.
               </p>
             )}
-            {meta.error && (
+            {meta.statusCode !== 404 && meta.error && (
               <p className="text-xs text-[var(--nos-negative)]">
                 The last read failed: {meta.error}.{meta.fetchedAt ? " Showing what the page said before." : ""}
               </p>
@@ -66,7 +71,7 @@ export function PageIdentity({ data, siteSlug }: { data: PageDetailResponse; sit
         ) : (
           !note && <p className="text-[var(--nos-text-muted)]">{data.metaReason}</p>
         )}
-        {!note && meta && (
+        {!note && meta && meta.statusCode !== 404 && (
           <p className="text-[11px] text-[var(--nos-text-muted)]">No team note for this page yet.</p>
         )}
       </div>

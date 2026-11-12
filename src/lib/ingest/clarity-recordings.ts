@@ -71,26 +71,50 @@ function timestamp(value: unknown): string | null {
     return Number.isNaN(date.getTime()) ? null : date.toISOString();
   }
   if (typeof value === "string" && value.trim()) {
-    const date = new Date(value);
+    // Clarity sends "2026-11-11 21:01:47" with no zone. That is UTC.
+    const naive = value.trim().match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})$/);
+    const date = new Date(naive ? `${naive[1]}T${naive[2]}Z` : value.trim());
     return Number.isNaN(date.getTime()) ? null : date.toISOString();
   }
   return null;
 }
 
-/** Seconds from a number, an `hh:mm:ss` string, or a field named in milliseconds. */
+/** "01 minute and 38 seconds", as Clarity writes a session length. */
+function proseDuration(value: string): number | null {
+  const text = value.toLowerCase();
+  let total = 0;
+  let matched = false;
+  for (const [unit, seconds] of [
+    ["hour", 3600],
+    ["minute", 60],
+    ["second", 1],
+  ] as const) {
+    const match = text.match(new RegExp(`(\\d+)\\s*${unit}s?`));
+    if (!match) continue;
+    matched = true;
+    total += Number(match[1]) * seconds;
+  }
+  return matched ? total : null;
+}
+
+/** Seconds from a number, an `hh:mm:ss` string, prose, or a field named in milliseconds. */
 function duration(session: Json): number | null {
   const ms = pick(session, ["durationMs", "durationInMs", "durationMilliseconds", "sessionDurationMs"]);
   if (ms !== undefined) {
     const value = Number(ms);
     return Number.isFinite(value) ? value / 1000 : null;
   }
-  const value = pick(session, ["durationSeconds", "durationInSeconds", "sessionDuration", "duration"]);
-  if (typeof value === "string" && /^\d{1,2}(:\d{2}){1,2}$/.test(value.trim())) {
-    return value
-      .trim()
-      .split(":")
-      .map(Number)
-      .reduce((total, part) => total * 60 + part, 0);
+  const value = pick(session, ["totalDuration", "durationSeconds", "durationInSeconds", "sessionDuration", "duration", "activeDuration"]);
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (/^\d{1,2}(:\d{2}){1,2}$/.test(trimmed)) {
+      return trimmed
+        .split(":")
+        .map(Number)
+        .reduce((total, part) => total * 60 + part, 0);
+    }
+    const prose = proseDuration(trimmed);
+    if (prose !== null) return prose;
   }
   const n = Number(value);
   return value !== undefined && Number.isFinite(n) && n >= 0 ? n : null;
@@ -143,9 +167,22 @@ export function parseRecordings(
       text(pick(session, ["sessionId", "sessionID", "session_id", "recordingId", "id"])) ??
       link ??
       createHash("sha1").update(JSON.stringify(session)).digest("hex");
-    const entry = text(pick(session, ["entryUrl", "entryPage", "landingPage", "landingUrl", "firstUrl", "startUrl"]));
-    const exit = text(pick(session, ["exitUrl", "exitPage", "lastUrl", "endUrl"]));
-    const visited = urlList(pick(session, ["visitedUrls", "visitedPages", "pageUrls", "urls", "pages"]));
+    const timeline = Array.isArray(session.timeline) ? session.timeline.filter(isObject) : [];
+    const timelineUrls = timeline
+      .map((item) => text(pick(item, ["url", "pageUrl"])))
+      .filter((url): url is string => Boolean(url));
+    const entry =
+      text(pick(session, ["entryUrl", "entryPage", "landingPage", "landingUrl", "firstUrl", "startUrl"])) ??
+      timelineUrls[0] ??
+      null;
+    const exit =
+      text(pick(session, ["exitUrl", "exitPage", "lastUrl", "endUrl"])) ??
+      timelineUrls[timelineUrls.length - 1] ??
+      null;
+    const visited = [
+      ...urlList(pick(session, ["visitedUrls", "visitedPages", "pageUrls", "urls", "pages"])),
+      ...timelineUrls,
+    ];
     const paths = [...new Set([entry, exit, ...visited].map((url) => normalisePath(url)).filter((p): p is string => Boolean(p)))];
     const pagesField = pick(session, ["pageCount", "pagesCount", "pageViews", "pages"]);
 
@@ -163,7 +200,9 @@ export function parseRecordings(
       device: text(pick(session, ["deviceType", "device"])),
       browser: text(pick(session, ["browser", "browserName"])),
       country: text(pick(session, ["country", "countryName", "location"])),
-      referrer: text(pick(session, ["referrer", "referringUrl", "referrerUrl", "referrer_url"])),
+      referrer:
+        text(pick(session, ["referrer", "referringUrl", "referrerUrl", "referrer_url"])) ??
+        (timeline[0] ? text(pick(timeline[0], ["referrerUrl", "referrer"])) : null),
       recording_url: link,
       raw: session,
     });

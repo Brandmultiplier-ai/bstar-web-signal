@@ -13,6 +13,13 @@ export const preferredRegion = "hnd1";
 
 const MAX_PATH_LENGTH = 2048;
 
+/** Until migration 0022 is applied the sources table does not exist; that is "not collected yet", not an error. */
+function missingRelation(error: { message: string; code?: string } | null): boolean {
+  return Boolean(
+    error && (error.code === "42P01" || /could not find the table|schema cache|does not exist/i.test(error.message)),
+  );
+}
+
 /** One page of one site, from stored GA4, Clarity, form and RB2B rows. Never calls an external API. */
 export async function GET(request: Request) {
   const timer = startTimer();
@@ -43,7 +50,7 @@ export async function GET(request: Request) {
   if (!site.data) return NextResponse.json({ error: "Unknown siteId" }, { status: 404 });
   const { domain, ga4_property_id, clarity_project_id, rb2b_enabled } = site.data;
 
-  const [ga4, landings, clarity, keyEvents, firstGa4, firstClarity, forms, visits] = await Promise.all([
+  const [ga4, landings, clarity, keyEvents, sources, anySources, firstGa4, firstClarity, forms, visits] = await Promise.all([
     supabase
       .from("ga4_page_daily")
       .select("date, pageviews, sessions, users, engaged_sessions, bounce_rate, avg_session_duration")
@@ -75,6 +82,14 @@ export async function GET(request: Request) {
       .gte("date", current.start)
       .lte("date", current.end),
     supabase
+      .from("ga4_landing_source_daily")
+      .select("date, source, medium, sessions")
+      .eq("site_id", siteId)
+      .eq("page_path", path)
+      .gte("date", current.start)
+      .lte("date", current.end),
+    supabase.from("ga4_landing_source_daily").select("date").eq("site_id", siteId).limit(1),
+    supabase
       .from("ga4_page_daily")
       .select("date")
       .eq("site_id", siteId)
@@ -104,7 +119,16 @@ export async function GET(request: Request) {
     landings: landings.data ?? [],
     clarity: clarity.data ?? [],
     keyEvents: keyEvents.data ?? [],
-    sources: { available: false, reason: "Traffic sources per page are not collected yet." },
+    sources: sources.error
+      ? {
+          available: false,
+          reason: missingRelation(sources.error)
+            ? "Traffic sources per page are not collected yet."
+            : `Traffic sources could not be read: ${sources.error.message}`,
+        }
+      : (anySources.data ?? []).length === 0
+        ? { available: false, reason: "Traffic sources per page are not collected yet." }
+        : { available: true, rows: sources.data ?? [] },
     forms,
     visits,
   });

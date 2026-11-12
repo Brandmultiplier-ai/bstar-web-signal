@@ -3,6 +3,8 @@
 import { MousePointerClick } from "lucide-react";
 
 import { useClarity } from "@/lib/hooks";
+import { usePageDrillStore } from "@/store/page-drill-store";
+import { PagePath } from "@/components/page-path";
 import {
   Panel,
   QueryState,
@@ -44,6 +46,11 @@ export function ClaritySection({
   range: DateFilter;
 }) {
   const { data, isLoading, isFetching, error } = useClarity(range, site?.id);
+  const openPage = usePageDrillStore((state) => state.open);
+  const openPath = usePageDrillStore((state) =>
+    site && state.page?.siteId === site.id ? state.page.path : null,
+  );
+  const siteHost = site ? site.domain.toLowerCase().replace(/^www\./, "") : null;
 
   const pageCoverage = data
     ? partialCoverage(
@@ -282,12 +289,29 @@ export function ClaritySection({
               info={[
                 pageCoverage ?? "",
                 "Click a column header to sort. Rates are session-weighted across the range.",
+                site ? "Click a row for that page's details." : "",
               ].filter(Boolean)}
             />
             <SimpleTable
               rows={data.topPages}
               empty="No Clarity pages stored in this range yet."
-              columns={pageColumns({ hasScroll, hasExcessive, hasRage, hasDead, hasQuick, hasJs })}
+              columns={pageColumns({
+                hasScroll,
+                hasExcessive,
+                hasRage,
+                hasDead,
+                hasQuick,
+                hasJs,
+                siteSlug: site?.slug,
+              })}
+              onRowClick={
+                siteHost
+                  ? (row) => {
+                      if (row.host === siteHost) openPage(site!.id, row.pagePath);
+                    }
+                  : undefined
+              }
+              isSelected={(row) => row.host === siteHost && row.pagePath === openPath}
             />
           </div>
 
@@ -324,6 +348,8 @@ function pageColumns(show: {
   hasDead: boolean;
   hasQuick: boolean;
   hasJs: boolean;
+  /** Only set when one site is selected, so a label never lands on another site's path. */
+  siteSlug?: string;
 }): Array<TableColumn<PageRow>> {
   const rate = (header: string, pick: (row: PageRow) => number | null): TableColumn<PageRow> => ({
     header,
@@ -333,7 +359,11 @@ function pageColumns(show: {
   });
   return [
     { header: "Host", cell: (row) => row.host, sortValue: (row) => row.host },
-    { header: "Path", cell: (row) => row.pagePath, sortValue: (row) => row.pagePath },
+    {
+      header: "Path",
+      cell: (row) => <PagePath siteSlug={show.siteSlug} path={row.pagePath} />,
+      sortValue: (row) => row.pagePath,
+    },
     {
       header: "Sessions",
       align: "right",

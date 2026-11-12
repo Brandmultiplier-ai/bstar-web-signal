@@ -77,6 +77,16 @@ export type Ga4LandingDaily = {
   engaged_sessions: number;
 };
 
+export type Ga4LandingSourceDaily = {
+  site_id: string;
+  date: string;
+  page_path: string;
+  source: string;
+  medium: string;
+  sessions: number;
+  users: number;
+};
+
 export type Ga4OsDaily = {
   site_id: string;
   date: string;
@@ -268,6 +278,7 @@ export type Database = {
       ga4_device_daily: Table<Ga4DeviceDaily>;
       ga4_channel_daily: Table<Ga4ChannelDaily>;
       ga4_landing_daily: Table<Ga4LandingDaily>;
+      ga4_landing_source_daily: Table<Ga4LandingSourceDaily>;
       ga4_os_daily: Table<Ga4OsDaily>;
       gsc_daily: Table<GscDaily>;
       gsc_query_daily: Table<GscQueryDaily>;

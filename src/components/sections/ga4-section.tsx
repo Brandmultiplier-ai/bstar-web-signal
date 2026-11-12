@@ -3,6 +3,8 @@
 import { BarChart3 } from "lucide-react";
 
 import { useGa4 } from "@/lib/hooks";
+import { usePageDrillStore } from "@/store/page-drill-store";
+import { PagePath } from "@/components/page-path";
 import {
   InfoEye,
   Panel,
@@ -40,6 +42,12 @@ import { REPORT_BLURBS, SOURCE_WINDOW_NOTES } from "@/lib/summaries";
 
 export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilter }) {
   const { data, isLoading, isFetching, error } = useGa4(site.id, range);
+  const openPage = usePageDrillStore((state) => state.open);
+  const openPath = usePageDrillStore((state) => (state.page?.siteId === site.id ? state.page.path : null));
+  const pageRowProps = {
+    onRowClick: (row: { page_path: string }) => openPage(site.id, row.page_path),
+    isSelected: (row: { page_path: string }) => row.page_path === openPath,
+  };
 
   return (
     <Panel
@@ -226,7 +234,7 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
             <SubHeading
               title="Landing pages"
               info={withSortHint(
-                "The first page of each session.",
+                "The first page of each session. Click a row for that page's details.",
                 partialCoverage(
                   data.landingPages.reduce((sum, row) => sum + row.sessions, 0),
                   data.totals.sessions,
@@ -237,8 +245,13 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
             <SimpleTable
               rows={data.landingPages ?? []}
               empty="No landing pages stored in this range yet."
+              {...pageRowProps}
               columns={[
-                { header: "Path", cell: (row) => row.page_path, sortValue: (row) => row.page_path },
+                {
+                  header: "Path",
+                  cell: (row) => <PagePath siteSlug={site.slug} path={row.page_path} />,
+                  sortValue: (row) => row.page_path,
+                },
                 {
                   header: "Sessions",
                   align: "right",
@@ -277,7 +290,7 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
             <SubHeading
               title="All pages"
               info={withSortHint(
-                "Every page viewed, wherever the session started.",
+                "Every page viewed, wherever the session started. Click a row for that page's details.",
                 partialCoverage(
                   data.topPages.reduce((sum, row) => sum + row.pageviews, 0),
                   data.totals.pageviews,
@@ -287,8 +300,13 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
             />
             <SimpleTable
               rows={data.topPages}
+              {...pageRowProps}
               columns={[
-                { header: "Path", cell: (row) => row.page_path, sortValue: (row) => row.page_path },
+                {
+                  header: "Path",
+                  cell: (row) => <PagePath siteSlug={site.slug} path={row.page_path} />,
+                  sortValue: (row) => row.page_path,
+                },
                 {
                   header: "Views",
                   align: "right",

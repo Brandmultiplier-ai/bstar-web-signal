@@ -8,6 +8,7 @@ import type {
   Ga4Response,
   GscResponse,
   LeadsResponse,
+  PageDetailResponse,
   SiteSummary,
   SummaryResponse,
   WebsiteSignalsResponse,
@@ -168,5 +169,18 @@ export function useLeads(siteId: string | undefined, range: DateFilter) {
   return useQuery({
     ...reportQueries.leads(siteId, range),
     placeholderData: sameSitePlaceholder<LeadsResponse>(siteId),
+  });
+}
+
+/** Stored rows for one page. Only runs while a page is open in the drill-in. */
+export function usePageDetail(siteId: string | undefined, path: string | null, range: DateFilter) {
+  const q = dateFilterSearch(range);
+  return useQuery({
+    queryKey: ["page", siteId, path, q] as const,
+    queryFn: () =>
+      getJson<PageDetailResponse>(
+        `/api/metrics/page?siteId=${siteId}&path=${encodeURIComponent(path ?? "")}&${q}`,
+      ),
+    enabled: Boolean(siteId && path),
   });
 }

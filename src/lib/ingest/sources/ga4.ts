@@ -11,6 +11,7 @@ import {
 } from "@/lib/ga4-event-rules";
 import { GA4_EVENT_NAME_TO_KEY, GA4_KEY_EVENTS } from "@/lib/sources";
 import { foldByKey, upsertRows } from "@/lib/ingest/upsert";
+import { capLandingSources } from "@/lib/ingest/ga4-landing-sources";
 import type { Ingestor, IngestContext, IngestResult } from "@/lib/ingest/types";
 import type {
   Ga4ChannelDaily,
@@ -19,6 +20,7 @@ import type {
   Ga4DeviceDaily,
   Ga4KeyEventDaily,
   Ga4LandingDaily,
+  Ga4LandingSourceDaily,
   Ga4OsDaily,
   Ga4PageDaily,
   Ga4SourceDaily,
@@ -428,6 +430,52 @@ async function ingestSources(ctx: IngestContext, group: PropertyGroup): Promise<
   return keepTopPerSiteDay(folded, (r) => r.sessions, TOP_SOURCES_PER_DAY);
 }
 
+/**
+ * Source and medium for sessions that started on each landing page. Kept
+ * apart from the other reports: if GA4 rejects it, or the table has not been
+ * created yet, the rest of the pull still succeeds and the failure is noted.
+ */
+async function ingestLandingSources(
+  ctx: IngestContext,
+  group: PropertyGroup,
+): Promise<{ rows: Ga4LandingSourceDaily[]; error: string | null }> {
+  try {
+    const rows = await runReport({
+      property: `properties/${group.propertyId}`,
+      dateRanges: [{ startDate: ctx.window.start, endDate: ctx.window.end }],
+      dimensions: [
+        { name: "date" },
+        { name: "hostName" },
+        { name: "landingPage" },
+        { name: "sessionSource" },
+        { name: "sessionMedium" },
+      ],
+      metrics: [{ name: "sessions" }, { name: "totalUsers" }],
+      orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+    });
+
+    const mapped: Ga4LandingSourceDaily[] = [];
+    for (const row of rows) {
+      const siteId = resolveSiteId(group, row.dimensionValues?.[1]?.value);
+      if (!siteId) continue;
+      const pagePath = dimension(row, 2);
+      if (pagePath === UNSET) continue;
+      mapped.push({
+        site_id: siteId,
+        date: fromCompactDate(dimension(row, 0)),
+        page_path: pagePath,
+        source: dimension(row, 3),
+        medium: dimension(row, 4),
+        sessions: metric(row, 0),
+        users: metric(row, 1),
+      });
+    }
+    return { rows: capLandingSources(mapped), error: null };
+  } catch (error) {
+    return { rows: [], error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 type KeyEventPull = {
   rows: Ga4KeyEventDaily[];
   excluded: Record<string, number>;
@@ -615,12 +663,14 @@ export const ga4Ingestor: Ingestor = {
       ga4_channel_daily: 0,
       ga4_landing_daily: 0,
       ga4_os_daily: 0,
+      ga4_landing_source_daily: 0,
     };
+    const landingSourceErrors: string[] = [];
     const excluded: Record<string, number> = {};
     const unapplied: Record<string, string[]> = {};
 
     for (const group of groups) {
-      const [totals, pages, sources, keyEvents, countries, devices, channels, landings, os] =
+      const [totals, pages, sources, keyEvents, countries, devices, channels, landings, os, landingSources] =
         await Promise.all([
           ingestTotals(ctx, group),
           ingestPages(ctx, group),
@@ -631,6 +681,7 @@ export const ga4Ingestor: Ingestor = {
           ingestChannels(ctx, group),
           ingestLandings(ctx, group),
           ingestOperatingSystems(ctx, group),
+          ingestLandingSources(ctx, group),
         ]);
       for (const [eventName, count] of Object.entries(keyEvents.excluded)) {
         excluded[eventName] = (excluded[eventName] ?? 0) + count;
@@ -683,13 +734,31 @@ export const ga4Ingestor: Ingestor = {
         "site_id,date,page_path",
       );
       details.ga4_os_daily += await upsertRows(ctx.admin, "ga4_os_daily", os, "site_id,date,os");
+
+      if (landingSources.error) {
+        landingSourceErrors.push(landingSources.error);
+      } else {
+        try {
+          details.ga4_landing_source_daily += await upsertRows(
+            ctx.admin,
+            "ga4_landing_source_daily",
+            landingSources.rows,
+            "site_id,date,page_path,source,medium",
+          );
+        } catch (error) {
+          landingSourceErrors.push(error instanceof Error ? error.message : String(error));
+        }
+      }
     }
 
     const rowsWritten = Object.values(details).reduce((sum, n) => sum + n, 0);
     for (const [eventName, count] of Object.entries(excluded)) {
       details[`excluded_${eventName}`] = count;
     }
-    const note = gateNote(unapplied, excluded);
+    const landingSourceNote = landingSourceErrors.length
+      ? `Landing page sources were not stored: ${landingSourceErrors[0]}`
+      : null;
+    const note = [gateNote(unapplied, excluded), landingSourceNote].filter(Boolean).join(" ") || null;
     if (note) console.info(`[ga4] ${note}`);
 
     return {

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Copy, ExternalLink } from "lucide-react";
 import {
   CartesianGrid,
@@ -15,6 +16,7 @@ import {
 
 import { formatLongDate } from "@/lib/dates";
 import { sourceLabel } from "@/lib/source-labels";
+import { prefetchSourceDetail } from "@/lib/hooks";
 import { sourceViewHref } from "@/lib/view-links";
 import {
   DeltaChip,
@@ -112,12 +114,14 @@ export function PageInsights({ insights }: { insights: PageDetailResponse["insig
 
 export function PageBody({
   data,
+  siteId,
   siteSlug,
   range,
   onNavigate,
   wide = false,
 }: {
   data: PageDetailResponse;
+  siteId: string;
   siteSlug: string;
   range: DateFilter;
   /** Called when a link leaves this view, so a drawer can close. */
@@ -137,7 +141,7 @@ export function PageBody({
           info="Sessions that started on this page, by where the visitor clicked from. Click a source to see everything it sends to the site."
         />
         {data.sources.available ? (
-          <SourceList rows={data.sources.rows} siteSlug={siteSlug} range={range} onNavigate={onNavigate} />
+          <SourceList rows={data.sources.rows} siteId={siteId} siteSlug={siteSlug} range={range} onNavigate={onNavigate} />
         ) : (
           <p className="text-sm text-[var(--nos-text-muted)]">{data.sources.reason}</p>
         )}
@@ -250,18 +254,23 @@ export function PageBody({
 /** Sources by readable name, each linking to that source's own view. */
 function SourceList({
   rows,
+  siteId,
   siteSlug,
   range,
   onNavigate,
 }: {
   rows: Array<{ source: string; medium: string; sessions: number }>;
+  siteId: string;
   siteSlug: string;
   range: DateFilter;
   onNavigate?: () => void;
 }) {
+  const queryClient = useQueryClient();
   if (rows.length === 0) return <p className="text-sm text-[var(--nos-text-muted)]">No sources stored for this page in this range.</p>;
   const total = rows.reduce((sum, row) => sum + row.sessions, 0);
   const max = Math.max(1, ...rows.map((row) => row.sessions));
+  const warm = (row: { source: string; medium: string }) =>
+    prefetchSourceDetail(queryClient, siteId, row.source, row.medium, range);
   return (
     <ul className="space-y-1">
       {rows.map((row) => {
@@ -270,6 +279,8 @@ function SourceList({
           <li key={label.raw}>
             <Link
               href={sourceViewHref(siteSlug, row.source, row.medium, range)}
+              onPointerEnter={() => warm(row)}
+              onPointerDown={() => warm(row)}
               onClick={onNavigate}
               className="group -mx-2 block rounded-xl px-2 py-2 hover:bg-white/5"
               title={label.explain}

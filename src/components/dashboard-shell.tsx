@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { startTransition, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
@@ -48,8 +48,8 @@ const VIEWS: Array<{
   { id: "leads", label: "Leads", hint: "RB2B and forms", icon: Building2 },
 ];
 
-/** Reports read most often after the summary, warmed once a site is chosen. */
-const WARM_VIEWS: View[] = ["ga4", "gsc"];
+/** Every report except the one on screen, warmed one at a time after the first paint. */
+const WARM_VIEWS: View[] = ["ga4", "gsc", "signals", "clarity", "calendly", "leads"];
 
 export function DashboardShell() {
   const { data: sites, isLoading, error } = useSites();
@@ -82,10 +82,12 @@ export function DashboardShell() {
   useEffect(() => {
     if (!siteId) return;
     // After the visible report has had its turn, warm the next likely tabs.
-    const timer = setTimeout(() => {
-      for (const next of WARM_VIEWS) prefetchView(queryClient, next, siteId, JSON.parse(rangeKey));
-    }, 1500);
-    return () => clearTimeout(timer);
+    const timers = WARM_VIEWS.map((next, index) =>
+      setTimeout(() => prefetchView(queryClient, next, siteId, JSON.parse(rangeKey)), 1500 + index * 400),
+    );
+    return () => {
+      for (const timer of timers) clearTimeout(timer);
+    };
   }, [queryClient, siteId, rangeKey]);
 
   const warm = (next: View) => prefetchView(queryClient, next, siteId, range);
@@ -167,7 +169,7 @@ export function DashboardShell() {
             return (
               <button
                 key={item.id}
-                onClick={() => setView(item.id)}
+                onClick={() => startTransition(() => setView(item.id))}
                 onMouseEnter={() => warm(item.id)}
                 onFocus={() => warm(item.id)}
                 className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors ${
@@ -244,7 +246,7 @@ export function DashboardShell() {
           {VIEWS.map((item) => (
             <button
               key={item.id}
-              onClick={() => setView(item.id)}
+              onClick={() => startTransition(() => setView(item.id))}
               onTouchStart={() => warm(item.id)}
               className={`shrink-0 rounded-xl px-3 py-2 text-xs transition-colors ${
                 view === item.id
@@ -265,7 +267,7 @@ export function DashboardShell() {
             <SummarySection
               site={selectedSite}
               range={range}
-              onOpen={(section) => setView(section)}
+              onOpen={(section) => startTransition(() => setView(section))}
               onHover={(section) => warm(section)}
             />
           )}

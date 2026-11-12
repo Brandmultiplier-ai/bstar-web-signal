@@ -1,15 +1,16 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 
-import { useSourceDetail } from "@/lib/hooks";
+import { prefetchPageDetail, useSourceDetail } from "@/lib/hooks";
 import { formatLongDate } from "@/lib/dates";
 import { pageViewHref } from "@/lib/view-links";
 import { DetailShell, useDetailContext } from "@/components/detail-shell";
 import { DailyLines, Tile } from "@/components/page-detail-body";
 import { PagePath } from "@/components/page-path";
 import {
-  PanelSkeleton,
+  OpeningState,
   RefreshBar,
   SimpleTable,
   SubHeading,
@@ -35,6 +36,7 @@ const KIND_LABEL: Record<SourceDetailResponse["label"]["kind"], string> = {
 export function SourceView() {
   const params = useSearchParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const source = params.get("source");
   const medium = params.get("medium");
   const { site, range, isLoading: sitesLoading, error: siteError } = useDetailContext();
@@ -52,7 +54,7 @@ export function SourceView() {
           {isFetching && shown && <RefreshBar />}
           {!shown ? (
             isLoading || isFetching ? (
-              <PanelSkeleton tiles={3} />
+              <OpeningState label="Loading this source" />
             ) : (
               <p className="text-sm text-[var(--nos-negative)]">
                 {error instanceof Error ? error.message : "Something went wrong."}
@@ -124,7 +126,11 @@ export function SourceView() {
                   <SimpleTable
                     rows={shown.pages.rows}
                     empty="No landing pages stored for this source in this range."
-                    onRowClick={(row) => router.push(pageViewHref(site.slug, row.path, range))}
+                    onRowIntent={(row) => prefetchPageDetail(queryClient, site.id, row.path, range)}
+                    onRowClick={(row) => {
+                      prefetchPageDetail(queryClient, site.id, row.path, range);
+                      router.push(pageViewHref(site.slug, row.path, range));
+                    }}
                     columns={[
                       { header: "Page", cell: (row) => <PagePath siteSlug={site.slug} path={row.path} />, sortValue: (row) => row.path },
                       { header: "Visits", align: "right", cell: (row) => formatNumber(row.sessions), sortValue: (row) => row.sessions },

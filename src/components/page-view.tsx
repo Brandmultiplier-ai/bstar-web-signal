@@ -9,7 +9,7 @@ import { PageLabelPill } from "@/components/page-path";
 import { PageBody, PageInsights, PageLinks, liveUrl } from "@/components/page-detail-body";
 import { PageIdentity } from "@/components/page-identity";
 import { PageRecordings } from "@/components/page-recordings";
-import { PanelSkeleton, RefreshBar } from "@/components/ui";
+import { OpeningState, RefreshBar } from "@/components/ui";
 
 /** Full, shareable view of one page: what it is, who sends people to it, and how they behave. */
 export function PageView() {
@@ -49,7 +49,7 @@ export function PageView() {
 
           {!shown ? (
             isLoading || isFetching ? (
-              <PanelSkeleton tiles={8} table={false} />
+              <OpeningState label="Loading this page" />
             ) : (
               <p className="text-sm text-[var(--nos-negative)]">
                 {error instanceof Error ? error.message : "Something went wrong."}
@@ -62,7 +62,7 @@ export function PageView() {
                 <PageInsights insights={shown.insights} />
               </div>
               <PageRecordings data={shown} />
-              <PageBody data={shown} siteSlug={site.slug} range={range} wide />
+              <PageBody data={shown} siteId={site.id} siteSlug={site.slug} range={range} wide />
             </>
           )}
         </div>

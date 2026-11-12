@@ -17,7 +17,7 @@ import {
 } from "@/store/dashboard-store";
 import { DateRangePicker } from "@/components/date-range-picker";
 import { Breadcrumbs } from "@/components/vision";
-import { PanelSkeleton } from "@/components/ui";
+import { OpeningState } from "@/components/ui";
 import type { SiteSummary } from "@/lib/api-types";
 
 /**
@@ -121,7 +121,7 @@ export function DetailShell({
         {error ? (
           <p className="text-sm text-[var(--nos-negative)]">{error}</p>
         ) : isLoading ? (
-          <PanelSkeleton />
+          <OpeningState label="Loading" />
         ) : (
           children
         )}

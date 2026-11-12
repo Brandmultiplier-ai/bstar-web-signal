@@ -173,16 +173,44 @@ export function useLeads(siteId: string | undefined, range: DateFilter) {
   });
 }
 
-/** Stored rows for one page. Only runs while a page is open in the drill-in. */
-export function usePageDetail(siteId: string | undefined, path: string | null, range: DateFilter) {
+function pageDetailOptions(siteId: string, path: string, range: DateFilter) {
   const q = dateFilterSearch(range);
-  return useQuery({
+  return queryOptions({
     queryKey: ["page", siteId, path, q] as const,
     queryFn: () =>
       getJson<PageDetailResponse>(
-        `/api/metrics/page?siteId=${siteId}&path=${encodeURIComponent(path ?? "")}&${q}`,
+        `/api/metrics/page?siteId=${siteId}&path=${encodeURIComponent(path)}&${q}`,
       ),
+  });
+}
+
+/** Stored rows for one page. Only runs while a page is open in the drill-in. */
+export function usePageDetail(siteId: string | undefined, path: string | null, range: DateFilter) {
+  return useQuery({
+    ...pageDetailOptions(siteId ?? "", path ?? "", range),
     enabled: Boolean(siteId && path),
+  });
+}
+
+/** Starts the page read on hover or pointer-down, so the click paints from cache. */
+export function prefetchPageDetail(
+  client: QueryClient,
+  siteId: string | undefined,
+  path: string,
+  range: DateFilter,
+) {
+  if (!siteId || !path) return;
+  void client.prefetchQuery(pageDetailOptions(siteId, path, range));
+}
+
+function sourceDetailOptions(siteId: string, source: string, medium: string, range: DateFilter) {
+  const q = dateFilterSearch(range);
+  return queryOptions({
+    queryKey: ["source", siteId, source, medium, q] as const,
+    queryFn: () =>
+      getJson<SourceDetailResponse>(
+        `/api/metrics/source?siteId=${siteId}&source=${encodeURIComponent(source)}&medium=${encodeURIComponent(medium)}&${q}`,
+      ),
   });
 }
 
@@ -193,13 +221,20 @@ export function useSourceDetail(
   medium: string | null,
   range: DateFilter,
 ) {
-  const q = dateFilterSearch(range);
   return useQuery({
-    queryKey: ["source", siteId, source, medium, q] as const,
-    queryFn: () =>
-      getJson<SourceDetailResponse>(
-        `/api/metrics/source?siteId=${siteId}&source=${encodeURIComponent(source ?? "")}&medium=${encodeURIComponent(medium ?? "")}&${q}`,
-      ),
+    ...sourceDetailOptions(siteId ?? "", source ?? "", medium ?? "", range),
     enabled: Boolean(siteId && source !== null && medium !== null),
   });
+}
+
+/** Starts the source read on hover or pointer-down, so the click paints from cache. */
+export function prefetchSourceDetail(
+  client: QueryClient,
+  siteId: string | undefined,
+  source: string,
+  medium: string,
+  range: DateFilter,
+) {
+  if (!siteId) return;
+  void client.prefetchQuery(sourceDetailOptions(siteId, source, medium, range));
 }

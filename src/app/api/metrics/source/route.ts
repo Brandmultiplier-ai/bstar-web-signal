@@ -33,11 +33,8 @@ export async function GET(request: Request) {
   const span: Window = { start: previous?.start ?? current.start, end: current.end };
   const { supabase } = auth;
 
-  const site = await supabase.from("sites").select("domain").eq("id", siteId).maybeSingle();
-  if (site.error) return NextResponse.json({ error: site.error.message }, { status: 500 });
-  if (!site.data) return NextResponse.json({ error: "Unknown siteId" }, { status: 404 });
-
-  const [totals, siteDaily, landings, anyLandings] = await Promise.all([
+  const [site, totals, siteDaily, landings, anyLandings] = await Promise.all([
+    supabase.from("sites").select("domain").eq("id", siteId).maybeSingle(),
     supabase
       .from("ga4_source_daily")
       .select("date, sessions, users")
@@ -63,6 +60,9 @@ export async function GET(request: Request) {
     supabase.from("ga4_landing_source_daily").select("date").eq("site_id", siteId).order("date").limit(1),
   ]);
   timer.mark("db");
+
+  if (site.error) return NextResponse.json({ error: site.error.message }, { status: 500 });
+  if (!site.data) return NextResponse.json({ error: "Unknown siteId" }, { status: 404 });
 
   const error = totals.error ?? siteDaily.error;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

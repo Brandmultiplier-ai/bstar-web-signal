@@ -48,8 +48,8 @@ export async function middleware(request: NextRequest) {
 
   if (!user && !isLoginPage) {
     const loginUrl = new URL("/login", request.url);
-    // Remember where they were headed so login can return them there.
-    loginUrl.searchParams.set("next", request.nextUrl.pathname);
+    // Remember where they were headed, query included, so a shared page link survives login.
+    loginUrl.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(loginUrl);
   }
 

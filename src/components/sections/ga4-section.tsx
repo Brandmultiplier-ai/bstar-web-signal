@@ -1,8 +1,11 @@
 "use client";
 
 import { BarChart3 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { useGa4 } from "@/lib/hooks";
+import { sourceLabel } from "@/lib/source-labels";
+import { sourceViewHref } from "@/lib/view-links";
 import { usePageDrillStore } from "@/store/page-drill-store";
 import { PagePath } from "@/components/page-path";
 import {
@@ -42,6 +45,7 @@ import { REPORT_BLURBS, SOURCE_WINDOW_NOTES } from "@/lib/summaries";
 
 export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilter }) {
   const { data, isLoading, isFetching, error } = useGa4(site.id, range);
+  const router = useRouter();
   const openPage = usePageDrillStore((state) => state.open);
   const openPath = usePageDrillStore((state) => (state.page?.siteId === site.id ? state.page.path : null));
   const pageRowProps = {
@@ -350,12 +354,25 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
           <div>
             <SubHeading
               title="Source / medium"
-              info={withSortHint("Where sessions came from, as GA4 records source and medium.", null)}
+              info={withSortHint(
+                "Where sessions came from, as GA4 records source and medium. Click a row for that source's details.",
+                null,
+              )}
             />
             <SimpleTable
               rows={data.topSources}
               empty="No source data stored in this range."
+              onRowClick={(row) => router.push(sourceViewHref(site.slug, row.source, row.medium, range))}
               columns={[
+                {
+                  header: "Where from",
+                  cell: (row) => (
+                    <span className="font-semibold text-white" title={sourceLabel(row.source, row.medium).explain}>
+                      {sourceLabel(row.source, row.medium).name}
+                    </span>
+                  ),
+                  sortValue: (row) => sourceLabel(row.source, row.medium).name,
+                },
                 { header: "Source", cell: (row) => row.source, sortValue: (row) => row.source },
                 { header: "Medium", cell: (row) => row.medium, sortValue: (row) => row.medium },
                 {

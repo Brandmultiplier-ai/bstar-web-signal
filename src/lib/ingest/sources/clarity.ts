@@ -1,8 +1,12 @@
 import { fetchClarityInsights } from "@/lib/clients/clarity";
+import { fetchClarityRecordings } from "@/lib/clients/clarity-recordings";
+import { CLARITY_PROJECT_TOKENS } from "@/lib/clarity-tokens";
 import { env } from "@/lib/env";
 import { addDays, todayUtc, toDateString } from "@/lib/dates";
-import { collectClarityProjects } from "@/lib/ingest/clarity-projects";
+import { collectClarityProjects, type ClarityProjectPull } from "@/lib/ingest/clarity-projects";
+import { parseRecordings, recordingWindow } from "@/lib/ingest/clarity-recordings";
 import { upsertRows } from "@/lib/ingest/upsert";
+import { missingRelation } from "@/lib/read/respond";
 import type { Ingestor, IngestContext, IngestResult } from "@/lib/ingest/types";
 
 /**
@@ -15,9 +19,10 @@ import type { Ingestor, IngestContext, IngestResult } from "@/lib/ingest/types";
  * only filter those stored days — they never call Clarity live.
  *
  * Each active project uses the token named in src/lib/clarity-tokens.ts.
- * Six calls per project (URL + Device + Browser + Source + Country + OS)
- * stay inside that project's own 10-per-day cap. A failed project is named
- * on the run and does not stop the others.
+ * Six calls per project (URL + Device + Browser + Source + Country + OS),
+ * plus one for yesterday's session recordings, stay inside that project's
+ * own 10-per-day cap. A failed project is named on the run and does not stop
+ * the others. A failed recordings call only adds a note.
  */
 
 export const clarityIngestor: Ingestor = {
@@ -76,16 +81,27 @@ export const clarityIngestor: Ingestor = {
       throw new Error(message);
     }
 
-    const note = [collected.note, writeFailed.length > 0 ? `Clarity failed for ${writeFailed.join(", ")}.` : null]
+    const recordings = await storeRecordings(
+      ctx,
+      collected.projects.filter((project) => !writeFailed.some((domain) => project.domains.includes(domain))),
+      date,
+    );
+
+    const note = [
+      collected.note,
+      writeFailed.length > 0 ? `Clarity failed for ${writeFailed.join(", ")}.` : null,
+      recordings.note,
+    ]
       .filter(Boolean)
       .join(" ");
 
     return {
-      rowsWritten: pagesWritten + dailyWritten + breakdownWritten,
+      rowsWritten: pagesWritten + dailyWritten + breakdownWritten + recordings.written,
       details: {
         clarity_page_daily: pagesWritten,
         clarity_daily: dailyWritten,
         clarity_breakdown_daily: breakdownWritten,
+        clarity_recordings: recordings.written,
         pages_matched_to_site: matched,
         pages_unmatched_host: unmatched,
       },
@@ -94,3 +110,54 @@ export const clarityIngestor: Ingestor = {
     };
   },
 };
+
+/**
+ * One recordings call per project that pulled cleanly. Checked against the
+ * table first so no Clarity call is spent before migration 0025 is applied.
+ * Never throws: a failure is a note on an otherwise successful run.
+ */
+async function storeRecordings(
+  ctx: IngestContext,
+  projects: ClarityProjectPull[],
+  date: string,
+): Promise<{ written: number; note: string | null }> {
+  if (projects.length === 0) return { written: 0, note: null };
+
+  const ready = await ctx.admin.from("clarity_recordings").select("session_id").limit(1);
+  if (ready.error) {
+    return {
+      written: 0,
+      note: missingRelation(ready.error)
+        ? "Recordings were not stored: the clarity_recordings table does not exist yet."
+        : `Recordings were not stored: ${ready.error.message}`,
+    };
+  }
+
+  let written = 0;
+  const problems: string[] = [];
+  for (const project of projects) {
+    const domains = project.domains.join(", ");
+    const envName = CLARITY_PROJECT_TOKENS[project.projectId];
+    const token = envName ? env.clarityToken(envName)?.trim() : "";
+    if (!token) continue;
+    try {
+      const raw = await fetchClarityRecordings(token, recordingWindow(date));
+      const parsed = parseRecordings(raw, { projectId: project.projectId, sites: ctx.sites });
+      if (!parsed.listFound) {
+        problems.push(`${domains}: no session list in the response (${parsed.shape})`);
+        continue;
+      }
+      written += await upsertRows(
+        ctx.admin,
+        "clarity_recordings",
+        parsed.rows.map((row) => ({ ...row, collected_at: new Date().toISOString() })),
+        "clarity_project_id,session_id",
+      );
+    } catch (error) {
+      console.error("[clarity] recordings failed", domains);
+      problems.push(`${domains}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  return { written, note: problems.length > 0 ? `Recordings were not stored for ${problems.join("; ")}.` : null };
+}

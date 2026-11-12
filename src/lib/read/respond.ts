@@ -26,6 +26,16 @@ export function startTimer(): RequestTimer {
 }
 
 /**
+ * A table whose migration is not applied yet, or that PostgREST's schema
+ * cache has not picked up. That means "not collected yet", not an error.
+ */
+export function missingRelation(error: { message: string; code?: string } | null): boolean {
+  return Boolean(
+    error && (error.code === "42P01" || /could not find the table|schema cache|does not exist/i.test(error.message)),
+  );
+}
+
+/**
  * Stored reports change at most daily. A short private cache lets the
  * browser reuse an answer on back and forward without a new read.
  */

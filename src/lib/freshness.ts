@@ -20,6 +20,7 @@ export const SOURCE_CHIP: Record<IngestSource, string> = {
   clarity: "Clarity",
   calendly: "Calendly",
   rb2b: "RB2B",
+  "page-meta": "Page info",
 };
 
 export type DeliveryStatus = {

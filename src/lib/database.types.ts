@@ -4,7 +4,7 @@
  *   supabase gen types typescript --project-id <id> --schema public
  */
 
-export type IngestSource = "ga4" | "gsc" | "clarity" | "calendly" | "rb2b";
+export type IngestSource = "ga4" | "gsc" | "clarity" | "calendly" | "rb2b" | "page-meta";
 export type IngestStatus = "running" | "success" | "error";
 
 export type Ga4EventKey =
@@ -249,6 +249,45 @@ export type FormCapture = {
   received_at: string;
 };
 
+/** What a page says about itself, read from its live HTML once a day. */
+export type PageMeta = {
+  site_id: string;
+  page_path: string;
+  /** Final URL after redirects. */
+  url: string | null;
+  status_code: number | null;
+  title: string | null;
+  description: string | null;
+  h1: string | null;
+  canonical_url: string | null;
+  /** Why the last read failed, if it did. */
+  error: string | null;
+  /** Last successful read. A failed read leaves the previous text in place. */
+  fetched_at: string | null;
+  checked_at: string;
+};
+
+/** One Clarity session, with its link to the replay in Clarity. */
+export type ClarityRecording = {
+  clarity_project_id: string;
+  session_id: string;
+  site_id: string | null;
+  started_at: string | null;
+  duration_seconds: number | null;
+  entry_url: string | null;
+  exit_url: string | null;
+  visited_paths: string[];
+  page_count: number | null;
+  click_count: number | null;
+  device: string | null;
+  browser: string | null;
+  country: string | null;
+  referrer: string | null;
+  recording_url: string | null;
+  raw: unknown;
+  collected_at: string;
+};
+
 export type SourceFreshness = {
   source: IngestSource;
   site_id: string | null;
@@ -289,6 +328,11 @@ export type Database = {
       calendly_bookings: Table<CalendlyBooking, Partial<CalendlyBooking>>;
       rb2b_visitors: Table<Rb2bVisitor, Partial<Rb2bVisitor>>;
       form_captures: Table<FormCapture, Partial<FormCapture> & Pick<FormCapture, "form_id">>;
+      page_meta: Table<PageMeta, Partial<PageMeta> & Pick<PageMeta, "site_id" | "page_path">>;
+      clarity_recordings: Table<
+        ClarityRecording,
+        Partial<ClarityRecording> & Pick<ClarityRecording, "clarity_project_id" | "session_id">
+      >;
     };
     Views: {
       source_freshness: { Row: SourceFreshness; Relationships: [] };

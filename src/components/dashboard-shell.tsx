@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
@@ -16,6 +16,7 @@ import {
 
 import { prefetchView, useSites, useSummary, type ReportView } from "@/lib/hooks";
 import { dateFilterFromStore, useDashboardStore, type DateFilter } from "@/store/dashboard-store";
+import { useDashboardViewStore } from "@/store/dashboard-view-store";
 import { createBrowserSupabase } from "@/lib/supabase/client";
 import { DateRangePicker } from "@/components/date-range-picker";
 import { Breadcrumbs, GradientRule, IconTile } from "@/components/vision";
@@ -61,7 +62,8 @@ export function DashboardShell() {
     customEnd,
   } = useDashboardStore();
   const range = dateFilterFromStore({ rangeDays, allTime, customStart, customEnd });
-  const [view, setView] = useState<View>("summary");
+  const view = useDashboardViewStore((state) => state.view);
+  const setView = useDashboardViewStore((state) => state.setView);
   const queryClient = useQueryClient();
 
   const selectedSite = useMemo(() => {

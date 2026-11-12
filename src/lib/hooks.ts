@@ -10,6 +10,7 @@ import type {
   LeadsResponse,
   PageDetailResponse,
   SiteSummary,
+  SourceDetailResponse,
   SummaryResponse,
   WebsiteSignalsResponse,
 } from "@/lib/api-types";
@@ -22,7 +23,7 @@ import { dateFilterSearch, type DateFilter } from "@/store/dashboard-store";
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(path, { credentials: "same-origin" });
   if (response.status === 401 && typeof window !== "undefined") {
-    window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname)}`);
+    window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
   }
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { error?: string };
@@ -182,5 +183,23 @@ export function usePageDetail(siteId: string | undefined, path: string | null, r
         `/api/metrics/page?siteId=${siteId}&path=${encodeURIComponent(path ?? "")}&${q}`,
       ),
     enabled: Boolean(siteId && path),
+  });
+}
+
+/** Stored rows for one traffic source of one site. */
+export function useSourceDetail(
+  siteId: string | undefined,
+  source: string | null,
+  medium: string | null,
+  range: DateFilter,
+) {
+  const q = dateFilterSearch(range);
+  return useQuery({
+    queryKey: ["source", siteId, source, medium, q] as const,
+    queryFn: () =>
+      getJson<SourceDetailResponse>(
+        `/api/metrics/source?siteId=${siteId}&source=${encodeURIComponent(source ?? "")}&medium=${encodeURIComponent(medium ?? "")}&${q}`,
+      ),
+    enabled: Boolean(siteId && source !== null && medium !== null),
   });
 }

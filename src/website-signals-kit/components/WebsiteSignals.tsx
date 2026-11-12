@@ -425,10 +425,12 @@ function SignalRow({
 
 export interface WebsiteSignalsProps {
   data: WebsiteData;
+  /** Makes Top Pages rows clickable. Receives the row's page path. */
+  onPageSelect?: (path: string) => void;
 }
 
 /** Full Website Signals section — Clarity KPIs, globe, recordings, company feed. */
-export function WebsiteSignals({ data }: WebsiteSignalsProps) {
+export function WebsiteSignals({ data, onPageSelect }: WebsiteSignalsProps) {
   const website = data;
 
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
@@ -647,7 +649,11 @@ export function WebsiteSignals({ data }: WebsiteSignalsProps) {
               ? "Sessions · Scroll depth · Exit rate"
               : "Ranked by sessions")
           }
-          info="Highest-traffic pages ranked by sessions."
+          info={
+            onPageSelect
+              ? "Highest-traffic pages ranked by sessions. Click a page for its details."
+              : "Highest-traffic pages ranked by sessions."
+          }
           className="lg:col-span-2"
           bodyClassName="flex flex-col"
         >
@@ -658,8 +664,24 @@ export function WebsiteSignals({ data }: WebsiteSignalsProps) {
                 initial={{ opacity: 0, x: 8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.04 }}
-                className="border-b py-2.5 last:border-0"
+                className={`border-b py-2.5 last:border-0 ${
+                  onPageSelect ? "-mx-2 cursor-pointer rounded-lg px-2 hover:bg-white/5" : ""
+                }`}
                 style={{ borderColor: "var(--border)" }}
+                {...(onPageSelect
+                  ? {
+                      role: "button",
+                      tabIndex: 0,
+                      "aria-label": `Open details for ${page.url}`,
+                      onClick: () => onPageSelect(page.url),
+                      onKeyDown: (event: React.KeyboardEvent) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          onPageSelect(page.url);
+                        }
+                      },
+                    }
+                  : {})}
               >
                 <div className="mb-1.5 flex items-center justify-between gap-3">
                   <span

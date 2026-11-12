@@ -3,6 +3,7 @@
 import { MousePointerClick } from "lucide-react";
 
 import { useClarity } from "@/lib/hooks";
+import { usePageDrillStore } from "@/store/page-drill-store";
 import {
   Panel,
   QueryState,
@@ -44,6 +45,11 @@ export function ClaritySection({
   range: DateFilter;
 }) {
   const { data, isLoading, isFetching, error } = useClarity(range, site?.id);
+  const openPage = usePageDrillStore((state) => state.open);
+  const openPath = usePageDrillStore((state) =>
+    site && state.page?.siteId === site.id ? state.page.path : null,
+  );
+  const siteHost = site ? site.domain.toLowerCase().replace(/^www\./, "") : null;
 
   const pageCoverage = data
     ? partialCoverage(
@@ -282,12 +288,21 @@ export function ClaritySection({
               info={[
                 pageCoverage ?? "",
                 "Click a column header to sort. Rates are session-weighted across the range.",
+                site ? "Click a row for that page's details." : "",
               ].filter(Boolean)}
             />
             <SimpleTable
               rows={data.topPages}
               empty="No Clarity pages stored in this range yet."
               columns={pageColumns({ hasScroll, hasExcessive, hasRage, hasDead, hasQuick, hasJs })}
+              onRowClick={
+                siteHost
+                  ? (row) => {
+                      if (row.host === siteHost) openPage(site!.id, row.pagePath);
+                    }
+                  : undefined
+              }
+              isSelected={(row) => row.host === siteHost && row.pagePath === openPath}
             />
           </div>
 

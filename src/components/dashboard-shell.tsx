@@ -26,6 +26,7 @@ import { CalendlySection } from "@/components/sections/calendly-section";
 import { WebsiteSignalsSection } from "@/components/sections/website-signals-section";
 import { SummarySection } from "@/components/sections/summary-section";
 import { LeadsSection } from "@/components/sections/leads-section";
+import { PageDrillDrawer } from "@/components/page-drill-drawer";
 import { describeFreshness, PanelSkeleton, type FreshnessState } from "@/components/ui";
 import type { SiteSummary, SummaryResponse } from "@/lib/api-types";
 
@@ -291,6 +292,7 @@ export function DashboardShell() {
           {view === "calendly" && <CalendlySection range={range} />}
         </div>
       </div>
+      {selectedSite && <PageDrillDrawer site={selectedSite} range={range} />}
     </div>
   );
 }

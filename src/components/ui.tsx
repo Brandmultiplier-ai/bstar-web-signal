@@ -313,6 +313,19 @@ export function SimpleTable<T>({
             <tr
               key={index}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
+              tabIndex={onRowClick ? 0 : undefined}
+              aria-selected={onRowClick ? Boolean(isSelected?.(row)) : undefined}
+              onKeyDown={
+                onRowClick
+                  ? (event) => {
+                      if (event.target !== event.currentTarget) return;
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onRowClick(row);
+                      }
+                    }
+                  : undefined
+              }
               className={`border-b border-[var(--border)] transition-colors last:border-0 hover:bg-white/5 ${
                 onRowClick ? "cursor-pointer" : ""
               } ${isSelected?.(row) ? "bg-white/[0.07]" : ""}`}

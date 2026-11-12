@@ -40,7 +40,8 @@ export async function executeIngest(ingestor: Ingestor): Promise<ExecuteOutcome>
     } catch (error) {
       // Every write is a keyed upsert, so a second attempt cannot duplicate
       // rows. Clarity is not retried: its API allows 10 calls per project a day.
-      if (ingestor.source === "clarity" || !isTransient(error)) throw error;
+      // Page meta is not retried: a second pass would not fit the route's time limit.
+      if (ingestor.source === "clarity" || ingestor.source === "page-meta" || !isTransient(error)) throw error;
       await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
       result = await ingestor.run(context);
     }

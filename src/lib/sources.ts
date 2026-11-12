@@ -11,6 +11,7 @@ export const SOURCE_CADENCE_DAYS: Record<IngestSource, number> = {
   gsc: 1,
   calendly: 0.5,
   rb2b: 7,
+  "page-meta": 1,
 };
 
 /** "every 12 hours", "daily", "every 7 days". */
@@ -27,9 +28,10 @@ export const SOURCE_LABELS: Record<IngestSource, string> = {
   clarity: "Microsoft Clarity",
   calendly: "Calendly",
   rb2b: "RB2B",
+  "page-meta": "Page titles and descriptions",
 };
 
-export const SCHEDULED_SOURCES = ["ga4", "gsc", "clarity", "calendly"] as const;
+export const SCHEDULED_SOURCES = ["ga4", "gsc", "clarity", "calendly", "page-meta"] as const;
 export type ScheduledSource = (typeof SCHEDULED_SOURCES)[number];
 
 export function isScheduledSource(value: string): value is ScheduledSource {
@@ -50,6 +52,7 @@ export const SOURCE_LOOKBACK_DAYS: Record<ScheduledSource, number> = {
   gsc: 10,
   calendly: 10,
   clarity: 1,
+  "page-meta": 7,
 };
 
 /** Used when a fact table is still sparse so the first successful ingest fills All time. */
@@ -58,6 +61,7 @@ export const SOURCE_INITIAL_LOOKBACK_DAYS: Record<ScheduledSource, number> = {
   gsc: 480,
   calendly: 480,
   clarity: 1,
+  "page-meta": 7,
 };
 
 /**

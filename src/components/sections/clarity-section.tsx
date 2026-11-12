@@ -4,6 +4,7 @@ import { MousePointerClick } from "lucide-react";
 
 import { useClarity } from "@/lib/hooks";
 import { usePageDrillStore } from "@/store/page-drill-store";
+import { PagePath } from "@/components/page-path";
 import {
   Panel,
   QueryState,
@@ -294,7 +295,15 @@ export function ClaritySection({
             <SimpleTable
               rows={data.topPages}
               empty="No Clarity pages stored in this range yet."
-              columns={pageColumns({ hasScroll, hasExcessive, hasRage, hasDead, hasQuick, hasJs })}
+              columns={pageColumns({
+                hasScroll,
+                hasExcessive,
+                hasRage,
+                hasDead,
+                hasQuick,
+                hasJs,
+                siteSlug: site?.slug,
+              })}
               onRowClick={
                 siteHost
                   ? (row) => {
@@ -339,6 +348,8 @@ function pageColumns(show: {
   hasDead: boolean;
   hasQuick: boolean;
   hasJs: boolean;
+  /** Only set when one site is selected, so a label never lands on another site's path. */
+  siteSlug?: string;
 }): Array<TableColumn<PageRow>> {
   const rate = (header: string, pick: (row: PageRow) => number | null): TableColumn<PageRow> => ({
     header,
@@ -348,7 +359,11 @@ function pageColumns(show: {
   });
   return [
     { header: "Host", cell: (row) => row.host, sortValue: (row) => row.host },
-    { header: "Path", cell: (row) => row.pagePath, sortValue: (row) => row.pagePath },
+    {
+      header: "Path",
+      cell: (row) => <PagePath siteSlug={show.siteSlug} path={row.pagePath} />,
+      sortValue: (row) => row.pagePath,
+    },
     {
       header: "Sessions",
       align: "right",

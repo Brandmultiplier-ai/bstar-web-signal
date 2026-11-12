@@ -2,6 +2,8 @@
 
 import { useWebsiteSignals } from "@/lib/hooks";
 import { usePageDrillStore } from "@/store/page-drill-store";
+import { pageLabel } from "@/lib/page-labels";
+import { PageLabelPill } from "@/components/page-path";
 import { FreshnessBadge, InfoEye, QueryState } from "@/components/ui";
 import { WebsiteSignals } from "@/website-signals-kit/components/WebsiteSignals";
 import type { SiteSummary } from "@/lib/api-types";
@@ -47,7 +49,14 @@ export function WebsiteSignalsSection({
         <InfoEye text={SOURCE_WINDOW_NOTES.overview} />
       </div>
 
-      <WebsiteSignals data={data.data} onPageSelect={(path) => openPage(site.id, path)} />
+      <WebsiteSignals
+        data={data.data}
+        onPageSelect={(path) => openPage(site.id, path)}
+        renderPageLabel={(path) => {
+          const label = pageLabel(site.slug, path);
+          return label ? <PageLabelPill label={label.label} note={label.note} /> : null;
+        }}
+      />
     </div>
   );
 }

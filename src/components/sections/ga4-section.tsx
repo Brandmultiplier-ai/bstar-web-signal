@@ -4,6 +4,7 @@ import { BarChart3 } from "lucide-react";
 
 import { useGa4 } from "@/lib/hooks";
 import { usePageDrillStore } from "@/store/page-drill-store";
+import { PagePath } from "@/components/page-path";
 import {
   InfoEye,
   Panel,
@@ -246,7 +247,11 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
               empty="No landing pages stored in this range yet."
               {...pageRowProps}
               columns={[
-                { header: "Path", cell: (row) => row.page_path, sortValue: (row) => row.page_path },
+                {
+                  header: "Path",
+                  cell: (row) => <PagePath siteSlug={site.slug} path={row.page_path} />,
+                  sortValue: (row) => row.page_path,
+                },
                 {
                   header: "Sessions",
                   align: "right",
@@ -297,7 +302,11 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
               rows={data.topPages}
               {...pageRowProps}
               columns={[
-                { header: "Path", cell: (row) => row.page_path, sortValue: (row) => row.page_path },
+                {
+                  header: "Path",
+                  cell: (row) => <PagePath siteSlug={site.slug} path={row.page_path} />,
+                  sortValue: (row) => row.page_path,
+                },
                 {
                   header: "Views",
                   align: "right",

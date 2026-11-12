@@ -15,6 +15,8 @@ import {
 import { usePageDetail } from "@/lib/hooks";
 import { formatLongDate } from "@/lib/dates";
 import { usePageDrillStore } from "@/store/page-drill-store";
+import { pageLabel } from "@/lib/page-labels";
+import { PageLabelPill } from "@/components/page-path";
 import {
   DeltaChip,
   InfoEye,
@@ -59,6 +61,7 @@ export function PageDrillDrawer({ site, range }: { site: SiteSummary; range: Dat
 
   if (!path) return null;
   const shown = data && data.path === path ? data : null;
+  const label = pageLabel(site.slug, path);
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
@@ -81,6 +84,12 @@ export function PageDrillDrawer({ site, range }: { site: SiteSummary; range: Dat
             <div className="min-w-0">
               <p className="text-label-caps">Page · {site.domain}</p>
               <h2 className="mt-1 break-all text-lg font-bold text-white">{path}</h2>
+              {label && (
+                <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-[var(--nos-text-secondary)]">
+                  <PageLabelPill label={label.label} />
+                  {label.note}
+                </p>
+              )}
             </div>
             <button
               ref={closeRef}

@@ -427,10 +427,12 @@ export interface WebsiteSignalsProps {
   data: WebsiteData;
   /** Makes Top Pages rows clickable. Receives the row's page path. */
   onPageSelect?: (path: string) => void;
+  /** Optional context shown beside a Top Pages path. */
+  renderPageLabel?: (path: string) => React.ReactNode;
 }
 
 /** Full Website Signals section — Clarity KPIs, globe, recordings, company feed. */
-export function WebsiteSignals({ data, onPageSelect }: WebsiteSignalsProps) {
+export function WebsiteSignals({ data, onPageSelect, renderPageLabel }: WebsiteSignalsProps) {
   const website = data;
 
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
@@ -690,6 +692,7 @@ export function WebsiteSignals({ data, onPageSelect }: WebsiteSignalsProps) {
                   >
                     {page.url}
                   </span>
+                  {renderPageLabel?.(page.url)}
                   <span
                     className="text-xs font-bold"
                     style={{ fontFamily: "var(--font-geist-mono)", color: "var(--nos-text-primary)" }}

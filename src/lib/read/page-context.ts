@@ -94,7 +94,6 @@ export async function readPageRecordings(
       .from("clarity_recordings")
       .select(
         "session_id, started_at, duration_seconds, page_count, click_count, device, browser, country, referrer, entry_url, exit_url, recording_url",
-        { count: "exact" },
       )
       .eq("site_id", siteId)
       .contains("visited_paths", [target])
@@ -120,7 +119,7 @@ export async function readPageRecordings(
 
   return {
     available: true,
-    total: matches.count ?? (matches.data ?? []).length,
+    total: (matches.data ?? []).length,
     rows: (matches.data ?? []).map((row) => ({
       sessionId: row.session_id,
       startedAt: row.started_at,

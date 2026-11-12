@@ -36,16 +36,14 @@ export async function GET(request: Request) {
   const span: Window = { start: previous?.start ?? current.start, end: current.end };
   const { supabase } = auth;
 
-  const site = await supabase
+  const sitePromise = supabase
     .from("sites")
     .select("domain, ga4_property_id, clarity_project_id, rb2b_enabled")
     .eq("id", siteId)
     .maybeSingle();
-  if (site.error) return NextResponse.json({ error: site.error.message }, { status: 500 });
-  if (!site.data) return NextResponse.json({ error: "Unknown siteId" }, { status: 404 });
-  const { domain, ga4_property_id, clarity_project_id, rb2b_enabled } = site.data;
 
-  const [ga4, landings, clarity, keyEvents, sources, anySources, firstGa4, firstClarity, forms, visits, meta, recordings] = await Promise.all([
+  const [site, ga4, landings, clarity, keyEvents, sources, anySources, firstGa4, firstClarity, forms, visits, meta, recordings] = await Promise.all([
+    sitePromise,
     supabase
       .from("ga4_page_daily")
       .select("date, pageviews, sessions, users, engaged_sessions, bounce_rate, avg_session_duration")
@@ -96,14 +94,31 @@ export async function GET(request: Request) {
       .eq("site_id", siteId)
       .order("date")
       .limit(1),
-    readFormCaptures(supabase, domain, span.start, span.end),
-    rb2b_enabled
-      ? readCompanyVisits(supabase, siteId, current.start, current.end)
-      : Promise.resolve({ available: false as const, reason: "RB2B is not enabled for this site." }),
+    sitePromise.then((row) =>
+      row.data
+        ? readFormCaptures(supabase, row.data.domain, span.start, span.end)
+        : { available: false as const, reason: "Forms could not be read." },
+    ),
+    sitePromise.then((row) =>
+      row.data?.rb2b_enabled
+        ? readCompanyVisits(supabase, siteId, current.start, current.end)
+        : {
+            available: false as const,
+            reason: row.data ? "RB2B is not enabled for this site." : "Company visits could not be read.",
+          },
+    ),
     readPageMeta(supabase, siteId, path),
-    readPageRecordings(supabase, siteId, path, current, clarity_project_id !== null),
+    readPageRecordings(supabase, siteId, path, current, true),
   ]);
   timer.mark("db");
+
+  if (site.error) return NextResponse.json({ error: site.error.message }, { status: 500 });
+  if (!site.data) return NextResponse.json({ error: "Unknown siteId" }, { status: 404 });
+  const { domain, ga4_property_id, clarity_project_id } = site.data;
+  const shownRecordings =
+    clarity_project_id === null && (!recordings.available || recordings.rows.length === 0)
+      ? { available: false as const, reason: "Clarity is not connected for this site." }
+      : recordings;
 
   const error = ga4.error ?? landings.error ?? clarity.error ?? keyEvents.error ?? firstGa4.error ?? firstClarity.error;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -152,7 +167,7 @@ export async function GET(request: Request) {
           ? null
           : "This page has not been read yet. Titles and descriptions are read once a day for each site's most viewed pages."
         : meta.reason,
-      recordings,
+      recordings: shownRecordings,
       conversions: detail.conversions.map((row) => ({
         ...row,
         label: GA4_KEY_EVENTS[row.eventKey as Ga4EventKey]?.label ?? row.eventKey,

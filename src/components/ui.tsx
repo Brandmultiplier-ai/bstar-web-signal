@@ -95,7 +95,7 @@ export function RefreshBar() {
   return (
     <span
       aria-hidden
-      className="absolute inset-x-0 top-0 h-0.5 animate-pulse"
+      className="absolute inset-x-0 top-0 h-0.5"
       style={{ background: "var(--vui-gradient-brand)" }}
     />
   );
@@ -234,12 +234,15 @@ export function SimpleTable<T>({
   columns,
   empty = "No data in this range.",
   onRowClick,
+  onRowIntent,
   isSelected,
 }: {
   rows: T[];
   columns: Array<TableColumn<T>>;
   empty?: string;
   onRowClick?: (row: T) => void;
+  /** Hover or press, used to start the read before the click. */
+  onRowIntent?: (row: T) => void;
   isSelected?: (row: T) => boolean;
 }) {
   const [sort, setSort] = useState<{ header: string; descending: boolean } | null>(null);
@@ -313,6 +316,8 @@ export function SimpleTable<T>({
             <tr
               key={index}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
+              onPointerEnter={onRowIntent ? () => onRowIntent(row) : undefined}
+              onPointerDown={onRowIntent ? () => onRowIntent(row) : undefined}
               tabIndex={onRowClick ? 0 : undefined}
               aria-selected={onRowClick ? Boolean(isSelected?.(row)) : undefined}
               onKeyDown={
@@ -435,7 +440,16 @@ const SKELETON_FILL = {
 } as const;
 
 function Block({ className }: { className: string }) {
-  return <div className={`animate-pulse rounded-2xl ${className}`} style={SKELETON_FILL} />;
+  return <div className={`rounded-2xl ${className}`} style={SKELETON_FILL} />;
+}
+
+/** A still stand-in. No pulse: a large animated placeholder is what made opening feel laggy. */
+export function OpeningState({ label }: { label: string }) {
+  return (
+    <p className="text-sm text-[var(--nos-text-secondary)]" aria-busy="true">
+      {label}
+    </p>
+  );
 }
 
 /**

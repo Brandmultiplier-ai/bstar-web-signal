@@ -168,12 +168,10 @@ function FunnelChart({ steps }: { steps: { label: string; sessions: number; drop
               className="h-8 overflow-hidden rounded-xl"
               style={{ background: "rgba(255,255,255,0.06)" }}
             >
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${widthPct}%` }}
-                transition={{ duration: 0.9, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
+              <div
                 className="h-full rounded-xl"
                 style={{
+                  width: `${widthPct}%`,
                   background: isFirst
                     ? "var(--vui-gradient-brand)"
                     : `linear-gradient(310deg, rgba(0,117,255,${0.9 - i * 0.12}) 0%, rgba(33,212,253,${0.85 - i * 0.1}) 100%)`,
@@ -190,9 +188,7 @@ function FunnelChart({ steps }: { steps: { label: string; sessions: number; drop
 
 function RecordingRow({ rec }: { rec: SessionRecording }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, x: -6 }}
-      animate={{ opacity: 1, x: 0 }}
+    <div
       className="flex items-center gap-3 py-2.5 border-b last:border-0 group cursor-pointer transition-colors"
       style={{ borderColor: "var(--border)" }}
       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--nos-bg-elevated)")}
@@ -243,7 +239,7 @@ function RecordingRow({ rec }: { rec: SessionRecording }) {
         </span>
         <span style={{ color: "var(--nos-text-muted)" }}>{deviceIcon(rec.device)}</span>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -427,12 +423,14 @@ export interface WebsiteSignalsProps {
   data: WebsiteData;
   /** Makes Top Pages rows clickable. Receives the row's page path. */
   onPageSelect?: (path: string) => void;
+  /** Hover or press on a Top Pages row, before the click. */
+  onPageIntent?: (path: string) => void;
   /** Optional context shown beside a Top Pages path. */
   renderPageLabel?: (path: string) => React.ReactNode;
 }
 
 /** Full Website Signals section — Clarity KPIs, globe, recordings, company feed. */
-export function WebsiteSignals({ data, onPageSelect, renderPageLabel }: WebsiteSignalsProps) {
+export function WebsiteSignals({ data, onPageSelect, onPageIntent, renderPageLabel }: WebsiteSignalsProps) {
   const website = data;
 
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
@@ -459,7 +457,7 @@ export function WebsiteSignals({ data, onPageSelect, renderPageLabel }: WebsiteS
   return (
     <motion.div
       variants={containerVariants}
-      initial="hidden"
+      initial={false}
       animate="visible"
       className="space-y-5"
     >
@@ -599,12 +597,9 @@ export function WebsiteSignals({ data, onPageSelect, renderPageLabel }: WebsiteS
                     className="h-2 rounded-full overflow-hidden"
                     style={{ background: "var(--nos-bg-elevated)" }}
                   >
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${b.pct}%` }}
-                      transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+                    <div
                       className="h-full rounded-full"
-                      style={{ background: b.color }}
+                      style={{ width: `${b.pct}%`, background: b.color }}
                     />
                   </div>
                 </div>
@@ -660,21 +655,20 @@ export function WebsiteSignals({ data, onPageSelect, renderPageLabel }: WebsiteS
           bodyClassName="flex flex-col"
         >
           <div className="space-y-0">
-            {website.topPages.map((page, i) => (
-              <motion.div
+            {website.topPages.map((page) => (
+              <div
                 key={page.url}
-                initial={{ opacity: 0, x: 8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.04 }}
                 className={`border-b py-2.5 last:border-0 ${
                   onPageSelect ? "-mx-2 cursor-pointer rounded-lg px-2 hover:bg-white/5" : ""
                 }`}
                 style={{ borderColor: "var(--border)" }}
                 {...(onPageSelect
                   ? {
-                      role: "button",
+                      role: "button" as const,
                       tabIndex: 0,
                       "aria-label": `Open details for ${page.url}`,
+                      onPointerEnter: () => onPageIntent?.(page.url),
+                      onPointerDown: () => onPageIntent?.(page.url),
                       onClick: () => onPageSelect(page.url),
                       onKeyDown: (event: React.KeyboardEvent) => {
                         if (event.key === "Enter" || event.key === " ") {
@@ -719,12 +713,9 @@ export function WebsiteSignals({ data, onPageSelect, renderPageLabel }: WebsiteS
                           className="h-1 rounded-full overflow-hidden"
                           style={{ background: "var(--nos-bg-elevated)" }}
                         >
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${page.scrollDepth}%` }}
-                            transition={{ duration: 0.7, delay: 0.1 + i * 0.04 }}
+                          <div
                             className="h-full rounded-full"
-                            style={{ background: "var(--nos-positive)" }}
+                            style={{ width: `${page.scrollDepth}%`, background: "var(--nos-positive)" }}
                           />
                         </div>
                       </div>
@@ -749,7 +740,7 @@ export function WebsiteSignals({ data, onPageSelect, renderPageLabel }: WebsiteS
                     )}
                   </div>
                 )}
-              </motion.div>
+              </div>
             ))}
           </div>
 
@@ -779,12 +770,9 @@ export function WebsiteSignals({ data, onPageSelect, renderPageLabel }: WebsiteS
                       className="h-1 w-16 overflow-hidden rounded-full"
                       style={{ background: "rgba(255,255,255,0.08)" }}
                     >
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(c.traffic / maxT) * 100}%` }}
-                        transition={{ duration: 0.7 }}
+                      <div
                         className="h-full rounded-full"
-                        style={{ background: "var(--vui-gradient-brand)" }}
+                        style={{ width: `${(c.traffic / maxT) * 100}%`, background: "var(--vui-gradient-brand)" }}
                       />
                     </div>
                     <span

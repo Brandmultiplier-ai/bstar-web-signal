@@ -1,8 +1,9 @@
 "use client";
 
 import { MousePointerClick } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
-import { useClarity } from "@/lib/hooks";
+import { prefetchPageDetail, useClarity } from "@/lib/hooks";
 import { usePageDrillStore } from "@/store/page-drill-store";
 import { PagePath } from "@/components/page-path";
 import {
@@ -46,10 +47,6 @@ export function ClaritySection({
   range: DateFilter;
 }) {
   const { data, isLoading, isFetching, error } = useClarity(range, site?.id);
-  const openPage = usePageDrillStore((state) => state.open);
-  const openPath = usePageDrillStore((state) =>
-    site && state.page?.siteId === site.id ? state.page.path : null,
-  );
   const siteHost = site ? site.domain.toLowerCase().replace(/^www\./, "") : null;
 
   const pageCoverage = data
@@ -292,9 +289,11 @@ export function ClaritySection({
                 site ? "Click a row for that page's details." : "",
               ].filter(Boolean)}
             />
-            <SimpleTable
+            <ClarityPageTable
+              site={site}
+              range={range}
+              siteHost={siteHost}
               rows={data.topPages}
-              empty="No Clarity pages stored in this range yet."
               columns={pageColumns({
                 hasScroll,
                 hasExcessive,
@@ -304,14 +303,6 @@ export function ClaritySection({
                 hasJs,
                 siteSlug: site?.slug,
               })}
-              onRowClick={
-                siteHost
-                  ? (row) => {
-                      if (row.host === siteHost) openPage(site!.id, row.pagePath);
-                    }
-                  : undefined
-              }
-              isSelected={(row) => row.host === siteHost && row.pagePath === openPath}
             />
           </div>
 
@@ -389,4 +380,51 @@ function pageColumns(show: {
     ...(show.hasQuick ? [rate("Quick back", (row) => row.quickBackPct)] : []),
     ...(show.hasJs ? [rate("JS errors", (row) => row.scriptErrorPct)] : []),
   ];
+}
+
+/** Subscribes to the open page on its own, so a click does not redraw the charts. */
+function ClarityPageTable({
+  site,
+  range,
+  siteHost,
+  rows,
+  columns,
+}: {
+  site?: SiteSummary;
+  range: DateFilter;
+  siteHost: string | null;
+  rows: ClarityResponse["topPages"];
+  columns: Array<TableColumn<ClarityResponse["topPages"][number]>>;
+}) {
+  const queryClient = useQueryClient();
+  const openPage = usePageDrillStore((state) => state.open);
+  const openPath = usePageDrillStore((state) =>
+    site && state.page?.siteId === site.id ? state.page.path : null,
+  );
+  const own = (row: { host: string }) => row.host === siteHost;
+
+  return (
+    <SimpleTable
+      rows={rows}
+      empty="No Clarity pages stored in this range yet."
+      columns={columns}
+      onRowIntent={
+        site && siteHost
+          ? (row) => {
+              if (own(row)) prefetchPageDetail(queryClient, site.id, row.pagePath, range);
+            }
+          : undefined
+      }
+      onRowClick={
+        site && siteHost
+          ? (row) => {
+              if (!own(row)) return;
+              prefetchPageDetail(queryClient, site.id, row.pagePath, range);
+              openPage(site.id, row.pagePath);
+            }
+          : undefined
+      }
+      isSelected={(row) => own(row) && row.pagePath === openPath}
+    />
+  );
 }

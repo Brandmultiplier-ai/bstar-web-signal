@@ -10,7 +10,7 @@ import { pageLabel } from "@/lib/page-labels";
 import { pageViewHref } from "@/lib/view-links";
 import { PageLabelPill } from "@/components/page-path";
 import { PageBody, PageInsights, PageLinks } from "@/components/page-detail-body";
-import { PanelSkeleton, RefreshBar } from "@/components/ui";
+import { OpeningState, RefreshBar } from "@/components/ui";
 import type { SiteSummary } from "@/lib/api-types";
 import type { DateFilter } from "@/store/dashboard-store";
 
@@ -99,7 +99,7 @@ export function PageDrillDrawer({ site, range }: { site: SiteSummary; range: Dat
         <div className="space-y-7 px-6 py-5">
           {!shown ? (
             isLoading || isFetching ? (
-              <PanelSkeleton tiles={6} table={false} />
+              <OpeningState label="Loading this page" />
             ) : (
               <p className="text-sm text-[var(--nos-negative)]">
                 {error instanceof Error ? error.message : "Something went wrong."}
@@ -108,7 +108,7 @@ export function PageDrillDrawer({ site, range }: { site: SiteSummary; range: Dat
           ) : (
             <>
               <PageInsights insights={shown.insights} />
-              <PageBody data={shown} siteSlug={site.slug} range={range} onNavigate={close} />
+              <PageBody data={shown} siteId={site.id} siteSlug={site.slug} range={range} onNavigate={close} />
             </>
           )}
         </div>

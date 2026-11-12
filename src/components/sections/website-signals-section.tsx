@@ -1,6 +1,8 @@
 "use client";
 
-import { useWebsiteSignals } from "@/lib/hooks";
+import { useQueryClient } from "@tanstack/react-query";
+
+import { prefetchPageDetail, useWebsiteSignals } from "@/lib/hooks";
 import { usePageDrillStore } from "@/store/page-drill-store";
 import { pageLabel } from "@/lib/page-labels";
 import { PageLabelPill } from "@/components/page-path";
@@ -26,6 +28,8 @@ export function WebsiteSignalsSection({
 }) {
   const { data, isLoading, error } = useWebsiteSignals(site.id, range);
   const openPage = usePageDrillStore((state) => state.open);
+  const queryClient = useQueryClient();
+  const warmPage = (path: string) => prefetchPageDetail(queryClient, site.id, path, range);
 
   if (!data) {
     return (
@@ -51,7 +55,11 @@ export function WebsiteSignalsSection({
 
       <WebsiteSignals
         data={data.data}
-        onPageSelect={(path) => openPage(site.id, path)}
+          onPageIntent={warmPage}
+          onPageSelect={(path) => {
+            warmPage(path);
+            openPage(site.id, path);
+          }}
         renderPageLabel={(path) => {
           const label = pageLabel(site.slug, path);
           return label ? <PageLabelPill label={label.label} note={label.note} /> : null;

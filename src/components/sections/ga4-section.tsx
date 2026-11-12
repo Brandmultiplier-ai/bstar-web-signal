@@ -2,8 +2,9 @@
 
 import { BarChart3 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 
-import { useGa4 } from "@/lib/hooks";
+import { prefetchPageDetail, prefetchSourceDetail, useGa4 } from "@/lib/hooks";
 import { sourceLabel } from "@/lib/source-labels";
 import { sourceViewHref } from "@/lib/view-links";
 import { usePageDrillStore } from "@/store/page-drill-store";
@@ -24,7 +25,7 @@ import { DonutChart } from "@/website-signals-kit/components/charts/DonutChart";
 import { HistogramBar } from "@/website-signals-kit/components/charts/HistogramBar";
 import { HorizontalBars } from "@/website-signals-kit/components/charts/HorizontalBars";
 import { TrendLine } from "@/website-signals-kit/components/charts/TrendLine";
-import type { SiteSummary } from "@/lib/api-types";
+import type { Ga4Response, SiteSummary } from "@/lib/api-types";
 import type { DateFilter } from "@/store/dashboard-store";
 import { partialCoverage } from "@/lib/format";
 
@@ -45,13 +46,6 @@ import { REPORT_BLURBS, SOURCE_WINDOW_NOTES } from "@/lib/summaries";
 
 export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilter }) {
   const { data, isLoading, isFetching, error } = useGa4(site.id, range);
-  const router = useRouter();
-  const openPage = usePageDrillStore((state) => state.open);
-  const openPath = usePageDrillStore((state) => (state.page?.siteId === site.id ? state.page.path : null));
-  const pageRowProps = {
-    onRowClick: (row: { page_path: string }) => openPage(site.id, row.page_path),
-    isSelected: (row: { page_path: string }) => row.page_path === openPath,
-  };
 
   return (
     <Panel
@@ -234,171 +228,15 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
             )}
           </div>
 
-          <div>
-            <SubHeading
-              title="Landing pages"
-              info={withSortHint(
-                "The first page of each session. Click a row for that page's details.",
-                partialCoverage(
-                  data.landingPages.reduce((sum, row) => sum + row.sessions, 0),
-                  data.totals.sessions,
-                  "sessions",
-                ),
-              )}
-            />
-            <SimpleTable
-              rows={data.landingPages ?? []}
-              empty="No landing pages stored in this range yet."
-              {...pageRowProps}
-              columns={[
-                {
-                  header: "Path",
-                  cell: (row) => <PagePath siteSlug={site.slug} path={row.page_path} />,
-                  sortValue: (row) => row.page_path,
-                },
-                {
-                  header: "Sessions",
-                  align: "right",
-                  cell: (row) => formatNumber(row.sessions),
-                  sortValue: (row) => row.sessions,
-                },
-                {
-                  header: "Users",
-                  align: "right",
-                  cell: (row) => formatNumber(row.users),
-                  sortValue: (row) => row.users,
-                },
-                {
-                  header: "Bounce",
-                  align: "right",
-                  cell: (row) => formatPercent(row.bounceRate),
-                  sortValue: (row) => row.bounceRate,
-                },
-                {
-                  header: "Engagement",
-                  align: "right",
-                  cell: (row) => formatPercent(row.engagementRate),
-                  sortValue: (row) => row.engagementRate,
-                },
-                {
-                  header: "Duration",
-                  align: "right",
-                  cell: (row) => formatDuration(row.avgSessionDuration),
-                  sortValue: (row) => row.avgSessionDuration,
-                },
-              ]}
-            />
-          </div>
-
-          <div>
-            <SubHeading
-              title="All pages"
-              info={withSortHint(
-                "Every page viewed, wherever the session started. Click a row for that page's details.",
-                partialCoverage(
-                  data.topPages.reduce((sum, row) => sum + row.pageviews, 0),
-                  data.totals.pageviews,
-                  "pageviews",
-                ),
-              )}
-            />
-            <SimpleTable
-              rows={data.topPages}
-              {...pageRowProps}
-              columns={[
-                {
-                  header: "Path",
-                  cell: (row) => <PagePath siteSlug={site.slug} path={row.page_path} />,
-                  sortValue: (row) => row.page_path,
-                },
-                {
-                  header: "Views",
-                  align: "right",
-                  cell: (row) => formatNumber(row.pageviews),
-                  sortValue: (row) => row.pageviews,
-                },
-                {
-                  header: "Sessions",
-                  align: "right",
-                  cell: (row) => formatNumber(row.sessions),
-                  sortValue: (row) => row.sessions,
-                },
-                {
-                  header: "Users",
-                  align: "right",
-                  cell: (row) => formatNumber(row.users),
-                  sortValue: (row) => row.users,
-                },
-                {
-                  header: "Bounce",
-                  align: "right",
-                  cell: (row) => formatPercent(row.bounceRate),
-                  sortValue: (row) => row.bounceRate,
-                },
-                {
-                  header: "Engagement",
-                  align: "right",
-                  cell: (row) => formatPercent(row.engagementRate),
-                  sortValue: (row) => row.engagementRate,
-                },
-                {
-                  header: "Time on page",
-                  align: "right",
-                  cell: (row) => formatDuration(row.avgSessionDuration),
-                  sortValue: (row) => row.avgSessionDuration,
-                },
-              ]}
-            />
-          </div>
-
-          <div>
-            <SubHeading
-              title="Source / medium"
-              info={withSortHint(
-                "Where sessions came from, as GA4 records source and medium. Click a row for that source's details.",
-                null,
-              )}
-            />
-            <SimpleTable
-              rows={data.topSources}
-              empty="No source data stored in this range."
-              onRowClick={(row) => router.push(sourceViewHref(site.slug, row.source, row.medium, range))}
-              columns={[
-                {
-                  header: "Where from",
-                  cell: (row) => (
-                    <span className="font-semibold text-white" title={sourceLabel(row.source, row.medium).explain}>
-                      {sourceLabel(row.source, row.medium).name}
-                    </span>
-                  ),
-                  sortValue: (row) => sourceLabel(row.source, row.medium).name,
-                },
-                { header: "Source", cell: (row) => row.source, sortValue: (row) => row.source },
-                { header: "Medium", cell: (row) => row.medium, sortValue: (row) => row.medium },
-                {
-                  header: "Sessions",
-                  align: "right",
-                  cell: (row) => formatNumber(row.sessions),
-                  sortValue: (row) => row.sessions,
-                },
-                {
-                  header: "Users",
-                  align: "right",
-                  cell: (row) => formatNumber(row.users),
-                  sortValue: (row) => row.users,
-                },
-                {
-                  header: "Share",
-                  align: "right",
-                  cell: (row) =>
-                    data.totals.sessions > 0
-                      ? formatPercent(row.sessions / data.totals.sessions)
-                      : "—",
-                  sortValue: (row) => row.sessions,
-                },
-              ]}
-            />
-          </div>
+          <Ga4DrillTables
+            site={site}
+            range={range}
+            landingPages={data.landingPages ?? []}
+            topPages={data.topPages}
+            topSources={data.topSources}
+            sessions={data.totals.sessions}
+            pageviews={data.totals.pageviews}
+          />
 
           <div>
             <SubHeading
@@ -453,5 +291,139 @@ export function Ga4Section({ site, range }: { site: SiteSummary; range: DateFilt
         </div>
       )}
     </Panel>
+  );
+}
+
+/**
+ * The tables that open a page or a source. They subscribe to the open page on
+ * their own, so choosing a row does not re-render the charts above.
+ */
+function Ga4DrillTables({
+  site,
+  range,
+  landingPages,
+  topPages,
+  topSources,
+  sessions,
+  pageviews,
+}: {
+  site: SiteSummary;
+  range: DateFilter;
+  landingPages: Ga4Response["landingPages"];
+  topPages: Ga4Response["topPages"];
+  topSources: Ga4Response["topSources"];
+  sessions: number;
+  pageviews: number;
+}) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const openPage = usePageDrillStore((state) => state.open);
+  const openPath = usePageDrillStore((state) => (state.page?.siteId === site.id ? state.page.path : null));
+  const warmPage = (path: string) => prefetchPageDetail(queryClient, site.id, path, range);
+  const pageRowProps = {
+    onRowIntent: (row: { page_path: string }) => warmPage(row.page_path),
+    onRowClick: (row: { page_path: string }) => {
+      warmPage(row.page_path);
+      openPage(site.id, row.page_path);
+    },
+    isSelected: (row: { page_path: string }) => row.page_path === openPath,
+  };
+
+  return (
+    <>
+      <div>
+        <SubHeading
+          title="Landing pages"
+          info={withSortHint(
+            "The first page of each session. Click a row for that page's details.",
+            partialCoverage(
+              landingPages.reduce((sum, row) => sum + row.sessions, 0),
+              sessions,
+              "sessions",
+            ),
+          )}
+        />
+        <SimpleTable
+          rows={landingPages}
+          empty="No landing pages stored in this range yet."
+          {...pageRowProps}
+          columns={[
+            { header: "Path", cell: (row) => <PagePath siteSlug={site.slug} path={row.page_path} />, sortValue: (row) => row.page_path },
+            { header: "Sessions", align: "right", cell: (row) => formatNumber(row.sessions), sortValue: (row) => row.sessions },
+            { header: "Users", align: "right", cell: (row) => formatNumber(row.users), sortValue: (row) => row.users },
+            { header: "Bounce", align: "right", cell: (row) => formatPercent(row.bounceRate), sortValue: (row) => row.bounceRate },
+            { header: "Engagement", align: "right", cell: (row) => formatPercent(row.engagementRate), sortValue: (row) => row.engagementRate },
+            { header: "Duration", align: "right", cell: (row) => formatDuration(row.avgSessionDuration), sortValue: (row) => row.avgSessionDuration },
+          ]}
+        />
+      </div>
+
+      <div>
+        <SubHeading
+          title="All pages"
+          info={withSortHint(
+            "Every page viewed, wherever the session started. Click a row for that page's details.",
+            partialCoverage(
+              topPages.reduce((sum, row) => sum + row.pageviews, 0),
+              pageviews,
+              "pageviews",
+            ),
+          )}
+        />
+        <SimpleTable
+          rows={topPages}
+          {...pageRowProps}
+          columns={[
+            { header: "Path", cell: (row) => <PagePath siteSlug={site.slug} path={row.page_path} />, sortValue: (row) => row.page_path },
+            { header: "Views", align: "right", cell: (row) => formatNumber(row.pageviews), sortValue: (row) => row.pageviews },
+            { header: "Sessions", align: "right", cell: (row) => formatNumber(row.sessions), sortValue: (row) => row.sessions },
+            { header: "Users", align: "right", cell: (row) => formatNumber(row.users), sortValue: (row) => row.users },
+            { header: "Bounce", align: "right", cell: (row) => formatPercent(row.bounceRate), sortValue: (row) => row.bounceRate },
+            { header: "Engagement", align: "right", cell: (row) => formatPercent(row.engagementRate), sortValue: (row) => row.engagementRate },
+            { header: "Time on page", align: "right", cell: (row) => formatDuration(row.avgSessionDuration), sortValue: (row) => row.avgSessionDuration },
+          ]}
+        />
+      </div>
+
+      <div>
+        <SubHeading
+          title="Source / medium"
+          info={withSortHint(
+            "Where sessions came from, as GA4 records source and medium. Click a row for that source's details.",
+            null,
+          )}
+        />
+        <SimpleTable
+          rows={topSources}
+          empty="No source data stored in this range."
+          onRowIntent={(row) => prefetchSourceDetail(queryClient, site.id, row.source, row.medium, range)}
+          onRowClick={(row) => {
+            prefetchSourceDetail(queryClient, site.id, row.source, row.medium, range);
+            router.push(sourceViewHref(site.slug, row.source, row.medium, range));
+          }}
+          columns={[
+            {
+              header: "Where from",
+              cell: (row) => (
+                <span className="font-semibold text-white" title={sourceLabel(row.source, row.medium).explain}>
+                  {sourceLabel(row.source, row.medium).name}
+                </span>
+              ),
+              sortValue: (row) => sourceLabel(row.source, row.medium).name,
+            },
+            { header: "Source", cell: (row) => row.source, sortValue: (row) => row.source },
+            { header: "Medium", cell: (row) => row.medium, sortValue: (row) => row.medium },
+            { header: "Sessions", align: "right", cell: (row) => formatNumber(row.sessions), sortValue: (row) => row.sessions },
+            { header: "Users", align: "right", cell: (row) => formatNumber(row.users), sortValue: (row) => row.users },
+            {
+              header: "Share",
+              align: "right",
+              cell: (row) => (sessions > 0 ? formatPercent(row.sessions / sessions) : "—"),
+              sortValue: (row) => row.sessions,
+            },
+          ]}
+        />
+      </div>
+    </>
   );
 }
